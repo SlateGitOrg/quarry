@@ -133,7 +133,20 @@ pub fn estimate(plan: &LogicalPlan) -> Estimate {
                 est.rows *= selectivity(f, &est);
             }
             if *join_type == JoinType::Left {
-                est.rows = est.rows.max(l.rows);
+                // Containment: a fraction ndv(r)/ndv(l) of left keys find a match;
+                // the rest appear once, NULL-extended.
+                let matched = on
+                    .first()
+                    .map(|(a, b)| (r.ndv(b) / l.ndv(a)).min(1.0))
+                    .unwrap_or(1.0);
+                let unmatched = l.rows * (1.0 - matched);
+                est.rows = (est.rows + unmatched).max(l.rows);
+                let null_frac = if est.rows > 0.0 { unmatched / est.rows } else { 0.0 };
+                for id in r.cols.keys() {
+                    if let Some(s) = est.cols.get_mut(id) {
+                        s.null_frac = s.null_frac.max(null_frac);
+                    }
+                }
             }
             est
         }

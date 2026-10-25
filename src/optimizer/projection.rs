@@ -22,7 +22,55 @@ impl OptimizerRule for ProjectionPushdown {
 
     fn optimize(&self, plan: LogicalPlan) -> Result<LogicalPlan> {
         let required = plan.output_ids();
-        prune(plan, &required)
+        prune(plan, &required)?.transform_up(&mut |p| Ok(merge_projections(p)))
+    }
+}
+
+/// Collapse `Project(columns) -> Project(exprs)` into one projection and drop
+/// projections that return their input unchanged.
+fn merge_projections(plan: LogicalPlan) -> LogicalPlan {
+    let LogicalPlan::Project { input, exprs } = plan else {
+        return plan;
+    };
+    let all_columns = exprs.iter().all(|(e, _)| matches!(e, Expr::Column(_)));
+    match *input {
+        LogicalPlan::Project {
+            input: inner_input,
+            exprs: inner,
+        } if all_columns => {
+            let merged = exprs
+                .into_iter()
+                .map(|(e, def)| {
+                    let Expr::Column(c) = &e else { unreachable!("checked above") };
+                    let source = inner
+                        .iter()
+                        .find(|(_, d)| d.id == c.id)
+                        .map(|(ie, _)| ie.clone())
+                        .unwrap_or(e);
+                    (source, def)
+                })
+                .collect();
+            merge_projections(LogicalPlan::Project {
+                input: inner_input,
+                exprs: merged,
+            })
+        }
+        other => {
+            let schema = other.schema();
+            let identity = all_columns
+                && exprs.len() == schema.len()
+                && exprs.iter().zip(&schema).all(|((e, def), c)| {
+                    matches!(e, Expr::Column(r) if r.id == c.id) && def.id == c.id && def.name == c.name
+                });
+            if identity {
+                other
+            } else {
+                LogicalPlan::Project {
+                    input: Box::new(other),
+                    exprs,
+                }
+            }
+        }
     }
 }
 
