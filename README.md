@@ -1,5 +1,7 @@
 # quarry
 
+[![CI](https://github.com/SlateGitOrg/quarry/actions/workflows/ci.yml/badge.svg)](https://github.com/SlateGitOrg/quarry/actions/workflows/ci.yml)
+
 A vectorized SQL query engine over Apache Arrow, written from scratch in Rust:
 a recursive-descent SQL parser, a typed binder, a rule-based optimizer with
 cost-based join reordering, and pull-based physical operators (hash join, hash
@@ -8,12 +10,11 @@ batches. Every one of its 22 TPC-H-like benchmark queries, 93 targeted feature
 queries and thousands of randomly generated queries return the same rows as
 SQLite on identical data.
 
-**Who it is for.** Engineers who want to see how a query engine fits together
-end to end in a codebase small enough to read: where predicate pushdown has to
-stop for outer joins, how a join order is picked from statistics, what
-"vectorized" means for a hash join, and how to test all of it against a
-reference database. It is a learning and portfolio project, not a production
-database.
+**Why.** A query engine is easiest to understand end to end when the codebase
+is small enough to read: where predicate pushdown has to stop for outer joins,
+how a join order is picked from statistics, what "vectorized" means for a hash
+join, and how to test all of it against a reference database. quarry is meant
+for that kind of study and experimentation, not as a production database.
 
 ## Features
 
@@ -285,9 +286,7 @@ The full list with trade-offs is in [DECISIONS.md](DECISIONS.md). Highlights:
 - **Statistics** are gathered with a full scan at registration and are exact,
   which costs memory proportional to the number of distinct values per column;
   they are not refreshed if a file changes.
-- **Benchmarks** come from one shared laptop and a synthetic generator; CI
-  (`.github/workflows/ci.yml`) is written but has not run, because this
-  repository has not been pushed anywhere yet.
+- **Benchmarks** come from one shared laptop and a synthetic generator.
 
 ## Roadmap
 
