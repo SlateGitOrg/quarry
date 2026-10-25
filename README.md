@@ -175,7 +175,7 @@ row groups of the date-clustered Parquet file were skipped.
 
 | What | Command | Result (this machine) |
 |---|---|---|
-| All gates | `make check` | passes: 113 tests, 94.81% line coverage (`cargo llvm-cov --summary-only`) |
+| All gates | `make check` | passes: 114 tests, 94.76% line coverage (`cargo llvm-cov --summary-only`) |
 | 22 TPC-H-like queries vs SQLite, SF 0.01 | `cargo test --test tpch_vs_sqlite` | 22/22 identical |
 | 93 NULL-heavy and signed-zero feature queries vs SQLite (64-row batches), each also re-run with every optimizer rule disabled | `cargo test --test sql_features` | all identical |
 | Random queries vs SQLite | `PROPTEST_CASES=30000 cargo test --release --test differential_fuzz` | 30,000/30,000 identical |
