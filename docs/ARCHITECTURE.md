@@ -254,9 +254,9 @@ memory.
 |---|---|---|
 | lexer, parser, binder, expression kernels, accumulators, calendar math | unit tests in each module | hand-written expectations |
 | end-to-end correctness | 22 TPC-H-like queries at SF 0.01 (`tests/tpch_vs_sqlite.rs`) | SQLite on identical data |
-| NULL semantics, joins, grouping, ordering | 78 feature queries on NULL-heavy tables, 64-row batches (`tests/sql_features.rs`) | SQLite |
+| NULL and signed-zero semantics, joins, grouping, ordering | 93 feature queries on NULL-heavy tables, 64-row batches (`tests/sql_features.rs`) | SQLite |
 | rule safety | every feature query re-run with each optimizer rule disabled | quarry with all rules |
-| random queries | proptest-driven query generator (`tests/differential_fuzz.rs`), 300 cases per run, more with `PROPTEST_CASES` | SQLite |
+| random queries | proptest-driven query generator (`tests/differential_fuzz.rs`; integer expressions plus a signed-zero DOUBLE family), 300 cases per run, more with `PROPTEST_CASES` | SQLite |
 | optimizer output | 29 golden EXPLAIN files (`tests/golden/`) plus structural checks (no cross products, smaller build side) | reviewed snapshots |
 | sources | memory vs CSV vs Parquet on all 22 queries; row-group pruning; CSV inference | quarry in-memory |
 | interfaces | error stages/positions, EXPLAIN variants, CLI end to end | expectations |

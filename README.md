@@ -4,7 +4,7 @@ A vectorized SQL query engine over Apache Arrow, written from scratch in Rust:
 a recursive-descent SQL parser, a typed binder, a rule-based optimizer with
 cost-based join reordering, and pull-based physical operators (hash join, hash
 aggregate, sort, scans over memory, CSV and Parquet) that process Arrow record
-batches. Every one of its 22 TPC-H-like benchmark queries, 78 targeted feature
+batches. Every one of its 22 TPC-H-like benchmark queries, 93 targeted feature
 queries and thousands of randomly generated queries return the same rows as
 SQLite on identical data.
 
@@ -177,7 +177,7 @@ row groups of the date-clustered Parquet file were skipped.
 |---|---|---|
 | All gates | `make check` | passes: 113 tests, 94.81% line coverage (`cargo llvm-cov --summary-only`) |
 | 22 TPC-H-like queries vs SQLite, SF 0.01 | `cargo test --test tpch_vs_sqlite` | 22/22 identical |
-| 78 NULL-heavy feature queries vs SQLite (64-row batches), each also re-run with every optimizer rule disabled | `cargo test --test sql_features` | all identical |
+| 93 NULL-heavy and signed-zero feature queries vs SQLite (64-row batches), each also re-run with every optimizer rule disabled | `cargo test --test sql_features` | all identical |
 | Random queries vs SQLite | `PROPTEST_CASES=30000 cargo test --release --test differential_fuzz` | 30,000/30,000 identical |
 | Optimizer golden plans (22 queries + 7 rewrite examples) | `cargo test --test optimizer_golden` | 29 files match; no cross products in any TPC-H plan except three tiny nested-loop joins |
 | Memory vs CSV vs Parquet on all 22 queries, Parquet pruning | `cargo test --test file_sources` | identical; Q6 prunes more than half the row groups |
