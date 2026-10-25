@@ -97,6 +97,7 @@ fn flatten(plan: LogicalPlan, leaves: &mut Vec<LogicalPlan>, preds: &mut Vec<Exp
 
 type Mask = u64;
 
+#[derive(Clone)]
 struct Pred {
     expr: Expr,
     mask: Mask,
@@ -177,7 +178,7 @@ fn solve(leaves: Vec<LogicalPlan>, preds: Vec<Expr>) -> LogicalPlan {
         greedy(&problem, n)
     };
     let mut slots: Vec<Option<LogicalPlan>> = leaves.into_iter().map(Some).collect();
-    let mut remaining: Vec<Option<Pred>> = problem.preds.drain(..).map(Some).collect();
+    let mut remaining: Vec<Option<Pred>> = problem.preds.iter().cloned().map(Some).collect();
     let (plan, _) = build(&tree, &mut slots, &mut remaining, &problem, &leaf_ids);
     // Predicates over a single leaf (pushdown disabled) or constants go on top.
     let leftover: Vec<Expr> = remaining
