@@ -45,7 +45,8 @@ pub fn format_table(schema: &SchemaRef, batches: &[RecordBatch]) -> String {
                     .iter()
                     .map(|c| match ScalarValue::from_array(c.as_ref(), i) {
                         Ok(v) => {
-                            let numeric = matches!(v, ScalarValue::Int64(_) | ScalarValue::Float64(_));
+                            let numeric =
+                                matches!(v, ScalarValue::Int64(_) | ScalarValue::Float64(_));
                             (format_value(&v), numeric)
                         }
                         Err(_) => ("?".to_string(), false),
@@ -79,11 +80,21 @@ pub fn format_table(schema: &SchemaRef, batches: &[RecordBatch]) -> String {
         out.push_str(&line(
             r.iter()
                 .zip(&widths)
-                .map(|((s, numeric), w)| if *numeric { format!("{s:>w$}") } else { format!("{s:<w$}") })
+                .map(|((s, numeric), w)| {
+                    if *numeric {
+                        format!("{s:>w$}")
+                    } else {
+                        format!("{s:<w$}")
+                    }
+                })
                 .collect(),
         ));
     }
-    out.push_str(&format!("({} row{})\n", rows.len(), if rows.len() == 1 { "" } else { "s" }));
+    out.push_str(&format!(
+        "({} row{})\n",
+        rows.len(),
+        if rows.len() == 1 { "" } else { "s" }
+    ));
     out
 }
 

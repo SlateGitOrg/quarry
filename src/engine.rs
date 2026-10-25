@@ -86,7 +86,11 @@ impl QueryResult {
     }
 
     fn from_lines(lines: &str) -> Result<QueryResult> {
-        let schema = Arc::new(Schema::new(vec![Field::new("plan", ArrowType::Utf8, false)]));
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "plan",
+            ArrowType::Utf8,
+            false,
+        )]));
         let col = StringArray::from(lines.lines().collect::<Vec<_>>());
         let batch = RecordBatch::try_new(schema.clone(), vec![Arc::new(col)])?;
         Ok(QueryResult {
@@ -191,7 +195,12 @@ impl Engine {
     }
 
     /// Register in-memory batches (converted to engine types).
-    pub fn register_batches(&mut self, name: &str, schema: SchemaRef, batches: Vec<RecordBatch>) -> Result<()> {
+    pub fn register_batches(
+        &mut self,
+        name: &str,
+        schema: SchemaRef,
+        batches: Vec<RecordBatch>,
+    ) -> Result<()> {
         let normalized = normalize_schema(&schema)?;
         let batches = batches
             .into_iter()
@@ -201,13 +210,19 @@ impl Engine {
     }
 
     /// Register a CSV file. It is read lazily on every scan.
-    pub fn register_csv(&mut self, name: &str, path: impl AsRef<Path>, opts: CsvOptions) -> Result<()> {
+    pub fn register_csv(
+        &mut self,
+        name: &str,
+        path: impl AsRef<Path>,
+        opts: CsvOptions,
+    ) -> Result<()> {
         let path = path.as_ref().to_path_buf();
         let schema = match &opts.schema {
             Some(s) => Arc::clone(s),
             None => {
-                let file = File::open(&path)
-                    .map_err(|e| QuarryError::Catalog(format!("cannot open {}: {e}", path.display())))?;
+                let file = File::open(&path).map_err(|e| {
+                    QuarryError::Catalog(format!("cannot open {}: {e}", path.display()))
+                })?;
                 let format = arrow::csv::reader::Format::default()
                     .with_header(opts.has_header)
                     .with_delimiter(opts.delimiter);
@@ -246,7 +261,10 @@ impl Engine {
         entries.sort();
         let mut names = Vec::new();
         for p in entries {
-            let (Some(stem), Some(ext)) = (p.file_stem().and_then(|s| s.to_str()), p.extension().and_then(|s| s.to_str())) else {
+            let (Some(stem), Some(ext)) = (
+                p.file_stem().and_then(|s| s.to_str()),
+                p.extension().and_then(|s| s.to_str()),
+            ) else {
                 continue;
             };
             match ext {

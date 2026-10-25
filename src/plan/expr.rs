@@ -57,7 +57,10 @@ pub enum ScalarFunc {
     ExtractMonth,
     ExtractDay,
     /// `date + INTERVAL`: adds calendar months, then days.
-    DateAdd { months: i32, days: i32 },
+    DateAdd {
+        months: i32,
+        days: i32,
+    },
 }
 
 impl fmt::Display for ScalarFunc {
@@ -204,7 +207,9 @@ impl Expr {
             Expr::Literal(v) => v.is_null(),
             Expr::IsNull(_) | Expr::IsNotNull(_) => false,
             Expr::Binary { left, op, right } => {
-                matches!(op, BinaryOp::Divide | BinaryOp::Modulo) || left.nullable() || right.nullable()
+                matches!(op, BinaryOp::Divide | BinaryOp::Modulo)
+                    || left.nullable()
+                    || right.nullable()
             }
             Expr::Not(e) | Expr::Negative(e) => e.nullable(),
             Expr::Like { expr, pattern, .. } => expr.nullable() || pattern.nullable(),
@@ -419,7 +424,12 @@ pub fn disjunction(exprs: Vec<Expr>) -> Option<Expr> {
         .reduce(|a, b| Expr::binary(a, BinaryOp::Or, b))
 }
 
-fn fmt_child(f: &mut fmt::Formatter<'_>, child: &Expr, parent_prec: u8, strict: bool) -> fmt::Result {
+fn fmt_child(
+    f: &mut fmt::Formatter<'_>,
+    child: &Expr,
+    parent_prec: u8,
+    strict: bool,
+) -> fmt::Result {
     let p = child.precedence();
     if p < parent_prec || (strict && p == parent_prec) {
         write!(f, "({child})")
@@ -472,7 +482,12 @@ impl fmt::Display for Expr {
             } => {
                 fmt_child(f, expr, 5, false)?;
                 let items: Vec<String> = list.iter().map(|e| e.to_string()).collect();
-                write!(f, " {}IN ({})", if *negated { "NOT " } else { "" }, items.join(", "))
+                write!(
+                    f,
+                    " {}IN ({})",
+                    if *negated { "NOT " } else { "" },
+                    items.join(", ")
+                )
             }
             Expr::Case {
                 branches,
@@ -522,10 +537,17 @@ mod tests {
             Expr::binary(c(2, "b"), BinaryOp::Minus, i(2)),
         );
         assert_eq!(e.to_string(), "(a + 1) * (b - 2)");
-        let e = Expr::binary(c(1, "a"), BinaryOp::Minus, Expr::binary(c(2, "b"), BinaryOp::Minus, i(1)));
+        let e = Expr::binary(
+            c(1, "a"),
+            BinaryOp::Minus,
+            Expr::binary(c(2, "b"), BinaryOp::Minus, i(1)),
+        );
         assert_eq!(e.to_string(), "a - (b - 1)");
-        let p = Expr::binary(c(1, "a"), BinaryOp::Gt, i(1))
-            .and(Expr::binary(Expr::binary(c(2, "b"), BinaryOp::Eq, i(1)), BinaryOp::Or, Expr::IsNull(Box::new(c(2, "b")))));
+        let p = Expr::binary(c(1, "a"), BinaryOp::Gt, i(1)).and(Expr::binary(
+            Expr::binary(c(2, "b"), BinaryOp::Eq, i(1)),
+            BinaryOp::Or,
+            Expr::IsNull(Box::new(c(2, "b"))),
+        ));
         assert_eq!(p.to_string(), "a > 1 AND (b = 1 OR b IS NULL)");
     }
 

@@ -66,8 +66,9 @@ pub fn open_table(
             delimiter,
             file_schema,
         } => {
-            let file = File::open(path)
-                .map_err(|e| QuarryError::Catalog(format!("cannot open {}: {e}", path.display())))?;
+            let file = File::open(path).map_err(|e| {
+                QuarryError::Catalog(format!("cannot open {}: {e}", path.display()))
+            })?;
             let reader = arrow::csv::ReaderBuilder::new(Arc::clone(file_schema))
                 .with_header(*has_header)
                 .with_delimiter(*delimiter)
@@ -78,8 +79,9 @@ pub fn open_table(
             Ok((Box::new(iter), 0, 0))
         }
         TableSource::Parquet { path } => {
-            let file = File::open(path)
-                .map_err(|e| QuarryError::Catalog(format!("cannot open {}: {e}", path.display())))?;
+            let file = File::open(path).map_err(|e| {
+                QuarryError::Catalog(format!("cannot open {}: {e}", path.display()))
+            })?;
             let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
             let total_groups = builder.metadata().num_row_groups();
             let keep: Vec<usize> = builder
@@ -113,7 +115,7 @@ pub fn normalize(batch: RecordBatch, target: &SchemaRef) -> Result<RecordBatch> 
             columns.push(cast(col.as_ref(), field.data_type())?);
         }
     }
-    Ok(super::make_batch(target, columns, batch.num_rows())?)
+    super::make_batch(target, columns, batch.num_rows())
 }
 
 /// Can statistics prove that no row in this row group satisfies `p`?
@@ -129,7 +131,8 @@ fn row_group_excludes(rg: &RowGroupMetaData, p: &PruningPredicate, table: &Table
         return false;
     };
     let v = &p.value;
-    let lt = |a: &ScalarValue, b: &ScalarValue| a.partial_cmp_sql(b) == Some(std::cmp::Ordering::Less);
+    let lt =
+        |a: &ScalarValue, b: &ScalarValue| a.partial_cmp_sql(b) == Some(std::cmp::Ordering::Less);
     match p.op {
         BinaryOp::Eq => lt(v, &min) || lt(&max, v),
         BinaryOp::Lt => !lt(&min, v),
@@ -143,13 +146,17 @@ fn row_group_excludes(rg: &RowGroupMetaData, p: &PruningPredicate, table: &Table
 fn stat_value(stats: &Statistics, t: DataType, min: bool) -> Option<ScalarValue> {
     let pick = |a: Option<&i64>, b: Option<&i64>| if min { a.copied() } else { b.copied() };
     Some(match (stats, t) {
-        (Statistics::Int32(s), DataType::Int64) => {
-            ScalarValue::Int64(Some(i64::from(*if min { s.min_opt()? } else { s.max_opt()? })))
-        }
+        (Statistics::Int32(s), DataType::Int64) => ScalarValue::Int64(Some(i64::from(*if min {
+            s.min_opt()?
+        } else {
+            s.max_opt()?
+        }))),
         (Statistics::Int32(s), DataType::Date32) => {
             ScalarValue::Date32(Some(*if min { s.min_opt()? } else { s.max_opt()? }))
         }
-        (Statistics::Int64(s), DataType::Int64) => ScalarValue::Int64(Some(pick(s.min_opt(), s.max_opt())?)),
+        (Statistics::Int64(s), DataType::Int64) => {
+            ScalarValue::Int64(Some(pick(s.min_opt(), s.max_opt())?))
+        }
         (Statistics::Double(s), DataType::Float64) => {
             ScalarValue::Float64(Some(*if min { s.min_opt()? } else { s.max_opt()? }))
         }
@@ -200,7 +207,8 @@ impl ScanExec {
 impl Operator for ScanExec {
     fn next_batch(&mut self) -> Result<Option<RecordBatch>> {
         if self.iter.is_none() {
-            let (iter, total, pruned) = open_table(&self.table, &self.indices, self.batch_size, &self.pruning)?;
+            let (iter, total, pruned) =
+                open_table(&self.table, &self.indices, self.batch_size, &self.pruning)?;
             self.iter = Some(iter);
             self.row_groups = (total, pruned);
         }

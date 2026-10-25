@@ -10,7 +10,9 @@
 use super::OptimizerRule;
 use crate::error::Result;
 use crate::physical::expr::evaluate_constant;
-use crate::plan::expr::{conjunction, disjunction, split_conjunction, split_disjunction, BinaryOp, Expr};
+use crate::plan::expr::{
+    conjunction, disjunction, split_conjunction, split_disjunction, BinaryOp, Expr,
+};
 use crate::plan::logical::LogicalPlan;
 use crate::types::ScalarValue;
 
@@ -42,10 +44,12 @@ fn is_false_or_null(e: &Expr) -> bool {
 fn prune_trivial_filters(node: LogicalPlan) -> LogicalPlan {
     match node {
         LogicalPlan::Filter { input, predicate } if is_true(&predicate) => *input,
-        LogicalPlan::Filter { input, predicate } if is_false_or_null(&predicate) => LogicalPlan::Empty {
-            columns: input.schema(),
-            one_row: false,
-        },
+        LogicalPlan::Filter { input, predicate } if is_false_or_null(&predicate) => {
+            LogicalPlan::Empty {
+                columns: input.schema(),
+                one_row: false,
+            }
+        }
         LogicalPlan::Scan(mut s) => {
             if s.filters.iter().any(is_false_or_null) {
                 return LogicalPlan::Empty {
@@ -197,14 +201,34 @@ mod tests {
 
     #[test]
     fn folds_constants_and_identities() {
-        let e = Expr::binary(col(1, "a"), BinaryOp::Gt, Expr::binary(int(2), BinaryOp::Multiply, int(5)));
+        let e = Expr::binary(
+            col(1, "a"),
+            BinaryOp::Gt,
+            Expr::binary(int(2), BinaryOp::Multiply, int(5)),
+        );
         assert_eq!(simplify(e).to_string(), "a > 10");
         let t = Expr::Literal(ScalarValue::Boolean(Some(true)));
         let f = Expr::Literal(ScalarValue::Boolean(Some(false)));
-        assert_eq!(simplify(eq(col(1, "a"), int(1)).and(t.clone())).to_string(), "a = 1");
-        assert_eq!(simplify(eq(col(1, "a"), int(1)).and(f.clone())).to_string(), "FALSE");
-        assert_eq!(simplify(Expr::binary(eq(col(1, "a"), int(1)), BinaryOp::Or, t)).to_string(), "TRUE");
-        assert_eq!(simplify(Expr::Not(Box::new(Expr::Not(Box::new(eq(col(1, "a"), int(1))))))).to_string(), "a = 1");
+        assert_eq!(
+            simplify(eq(col(1, "a"), int(1)).and(t.clone())).to_string(),
+            "a = 1"
+        );
+        assert_eq!(
+            simplify(eq(col(1, "a"), int(1)).and(f.clone())).to_string(),
+            "FALSE"
+        );
+        assert_eq!(
+            simplify(Expr::binary(eq(col(1, "a"), int(1)), BinaryOp::Or, t)).to_string(),
+            "TRUE"
+        );
+        assert_eq!(
+            simplify(Expr::Not(Box::new(Expr::Not(Box::new(eq(
+                col(1, "a"),
+                int(1)
+            ))))))
+            .to_string(),
+            "a = 1"
+        );
         // Overflow is not folded; it stays for runtime.
         let o = Expr::binary(int(i64::MAX), BinaryOp::Plus, int(1));
         assert_eq!(simplify(o.clone()), o);
@@ -219,7 +243,11 @@ mod tests {
             k.clone().and(eq(col(3, "c"), int(2))),
         );
         assert_eq!(simplify(e).to_string(), "a = b AND (c = 1 OR c = 2)");
-        let absorb = Expr::binary(k.clone(), BinaryOp::Or, k.clone().and(eq(col(3, "c"), int(2))));
+        let absorb = Expr::binary(
+            k.clone(),
+            BinaryOp::Or,
+            k.clone().and(eq(col(3, "c"), int(2))),
+        );
         assert_eq!(simplify(absorb).to_string(), "a = b");
     }
 }

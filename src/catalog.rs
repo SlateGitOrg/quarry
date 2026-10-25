@@ -114,7 +114,9 @@ pub fn normalize_schema(schema: &Schema) -> Result<SchemaRef> {
     for f in schema.fields() {
         let name = f.name().to_ascii_lowercase();
         if !seen.insert(name.clone()) {
-            return Err(QuarryError::Catalog(format!("duplicate column name '{name}'")));
+            return Err(QuarryError::Catalog(format!(
+                "duplicate column name '{name}'"
+            )));
         }
         let dt = DataType::from_arrow(f.data_type()).ok_or_else(|| {
             QuarryError::Catalog(format!(
@@ -124,7 +126,11 @@ pub fn normalize_schema(schema: &Schema) -> Result<SchemaRef> {
             ))
         })?;
         // Untyped columns (all-NULL CSV columns) are treated as text.
-        let dt = if dt == DataType::Null { DataType::Utf8 } else { dt };
+        let dt = if dt == DataType::Null {
+            DataType::Utf8
+        } else {
+            dt
+        };
         fields.push(Field::new(name, dt.to_arrow(), true));
     }
     Ok(Arc::new(Schema::new(fields)))
@@ -247,7 +253,11 @@ fn hash_of<T: Hash>(v: T) -> u64 {
     FxBuildHasher.hash_one(v)
 }
 
-fn merge_bound(slot: &mut Option<ScalarValue>, cand: Option<ScalarValue>, keep: std::cmp::Ordering) {
+fn merge_bound(
+    slot: &mut Option<ScalarValue>,
+    cand: Option<ScalarValue>,
+    keep: std::cmp::Ordering,
+) {
     if let Some(c) = cand {
         let replace = match slot {
             None => true,

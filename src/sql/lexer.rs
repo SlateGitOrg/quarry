@@ -10,7 +10,10 @@ use crate::error::{QuarryError, Result};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// An identifier or keyword. `quoted` identifiers are never keywords.
-    Ident { value: String, quoted: bool },
+    Ident {
+        value: String,
+        quoted: bool,
+    },
     /// A numeric literal, kept as text so the parser can pick int vs float.
     Number(String),
     /// A single-quoted string literal with `''` escapes resolved.
@@ -39,7 +42,10 @@ impl Token {
     /// Human-readable rendering for error messages.
     pub fn describe(&self) -> String {
         match self {
-            Token::Ident { value, quoted: true } => format!("\"{value}\""),
+            Token::Ident {
+                value,
+                quoted: true,
+            } => format!("\"{value}\""),
             Token::Ident { value, .. } => value.clone(),
             Token::Number(n) => n.clone(),
             Token::Str(s) => format!("'{s}'"),
@@ -294,8 +300,14 @@ impl Lexer {
             }
             self.bump();
         }
-        if self.peek().is_some_and(|c| c.is_ascii_alphabetic() || c == '_') {
-            return self.error(format!("invalid numeric literal '{s}{}'", self.peek().unwrap_or(' ')));
+        if self
+            .peek()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        {
+            return self.error(format!(
+                "invalid numeric literal '{s}{}'",
+                self.peek().unwrap_or(' ')
+            ));
         }
         Ok(Token::Number(s))
     }
@@ -325,7 +337,11 @@ mod tests {
     use super::*;
 
     fn kinds(sql: &str) -> Vec<Token> {
-        tokenize(sql).unwrap().into_iter().map(|s| s.token).collect()
+        tokenize(sql)
+            .unwrap()
+            .into_iter()
+            .map(|s| s.token)
+            .collect()
     }
 
     fn ident(s: &str) -> Token {
@@ -339,7 +355,13 @@ mod tests {
     fn keywords_fold_to_lower_case() {
         assert_eq!(
             kinds("SELECT a FROM T"),
-            vec![ident("select"), ident("a"), ident("from"), ident("t"), Token::Eof]
+            vec![
+                ident("select"),
+                ident("a"),
+                ident("from"),
+                ident("t"),
+                Token::Eof
+            ]
         );
     }
 
@@ -379,8 +401,14 @@ mod tests {
     #[test]
     fn lexical_errors() {
         assert!(matches!(tokenize("'abc"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(tokenize("/* never closed"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(tokenize("select #"), Err(QuarryError::Parse { column: 8, .. })));
+        assert!(matches!(
+            tokenize("/* never closed"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            tokenize("select #"),
+            Err(QuarryError::Parse { column: 8, .. })
+        ));
         assert!(matches!(tokenize("12abc"), Err(QuarryError::Parse { .. })));
         assert!(matches!(tokenize("\"\""), Err(QuarryError::Parse { .. })));
     }

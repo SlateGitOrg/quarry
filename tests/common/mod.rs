@@ -140,17 +140,20 @@ pub fn load_sqlite(conn: &Connection, name: &str, schema: &SchemaRef, batches: &
                 let vals: Vec<Value> = b
                     .columns()
                     .iter()
-                    .map(|c| match ScalarValue::from_array(c.as_ref(), i).expect("scalar") {
-                        v if v.is_null() => Value::Null,
-                        ScalarValue::Boolean(Some(x)) => Value::Integer(i64::from(x)),
-                        ScalarValue::Int64(Some(x)) => Value::Integer(x),
-                        ScalarValue::Float64(Some(x)) => Value::Real(x),
-                        ScalarValue::Utf8(Some(s)) => Value::Text(s),
-                        ScalarValue::Date32(Some(d)) => Value::Text(format_date(d)),
-                        _ => Value::Null,
-                    })
+                    .map(
+                        |c| match ScalarValue::from_array(c.as_ref(), i).expect("scalar") {
+                            v if v.is_null() => Value::Null,
+                            ScalarValue::Boolean(Some(x)) => Value::Integer(i64::from(x)),
+                            ScalarValue::Int64(Some(x)) => Value::Integer(x),
+                            ScalarValue::Float64(Some(x)) => Value::Real(x),
+                            ScalarValue::Utf8(Some(s)) => Value::Text(s),
+                            ScalarValue::Date32(Some(d)) => Value::Text(format_date(d)),
+                            _ => Value::Null,
+                        },
+                    )
                     .collect();
-                stmt.execute(rusqlite::params_from_iter(vals)).expect("insert");
+                stmt.execute(rusqlite::params_from_iter(vals))
+                    .expect("insert");
             }
         }
     }
@@ -160,7 +163,8 @@ pub fn load_sqlite(conn: &Connection, name: &str, schema: &SchemaRef, batches: &
 pub fn new_sqlite() -> Connection {
     let conn = Connection::open_in_memory().expect("sqlite");
     // quarry's LIKE is case sensitive (as in the SQL standard / PostgreSQL).
-    conn.execute_batch("PRAGMA case_sensitive_like = ON;").expect("pragma");
+    conn.execute_batch("PRAGMA case_sensitive_like = ON;")
+        .expect("pragma");
     conn
 }
 
@@ -169,8 +173,12 @@ pub fn new_sqlite() -> Connection {
 /// `substring(x FROM a FOR b)` becomes `substr(x, a, b)`.
 pub fn to_sqlite_dialect(sql: &str) -> String {
     let mut s = fold_date_intervals(sql);
-    s = rewrite_call(&s, "EXTRACT(YEAR FROM ", |inner| format!("CAST(strftime('%Y', {inner}) AS INTEGER)"));
-    s = rewrite_call(&s, "EXTRACT(MONTH FROM ", |inner| format!("CAST(strftime('%m', {inner}) AS INTEGER)"));
+    s = rewrite_call(&s, "EXTRACT(YEAR FROM ", |inner| {
+        format!("CAST(strftime('%Y', {inner}) AS INTEGER)")
+    });
+    s = rewrite_call(&s, "EXTRACT(MONTH FROM ", |inner| {
+        format!("CAST(strftime('%m', {inner}) AS INTEGER)")
+    });
     s = rewrite_call(&s, "substring(", |inner| {
         let inner = inner.replacen(" FROM ", ", ", 1).replacen(" FOR ", ", ", 1);
         format!("substr({inner})")
@@ -204,7 +212,9 @@ fn fold_date_intervals(sql: &str) -> String {
         let q = iv.find('\'').expect("interval quote");
         let n: i32 = iv[..q].parse().expect("interval value");
         let unit_rest = iv[q + 1..].trim_start();
-        let unit_len = unit_rest.find(|c: char| !c.is_ascii_alphabetic()).unwrap_or(unit_rest.len());
+        let unit_len = unit_rest
+            .find(|c: char| !c.is_ascii_alphabetic())
+            .unwrap_or(unit_rest.len());
         let unit = &unit_rest[..unit_len];
         let d = parse_date(date).expect("date");
         let v = sign * n;
@@ -284,7 +294,8 @@ pub fn check(fx: &Fixture, label: &str, sql: &str, ordered: bool) -> usize {
     let lite_sql = to_sqlite_dialect(sql);
     let theirs = {
         let conn = fx.sqlite.lock().unwrap_or_else(|e| e.into_inner());
-        sqlite_rows(&conn, &lite_sql).unwrap_or_else(|e| panic!("{label}: sqlite failed: {e}\n{lite_sql}"))
+        sqlite_rows(&conn, &lite_sql)
+            .unwrap_or_else(|e| panic!("{label}: sqlite failed: {e}\n{lite_sql}"))
     };
     let n = theirs.len();
     compare(label, quarry_rows(&ours), theirs, ordered);

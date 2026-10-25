@@ -76,7 +76,11 @@ pub fn estimate(plan: &LogicalPlan) -> Estimate {
                             ndv: (cs.ndv as f64).max(1.0),
                             min: cs.min.as_ref().and_then(|v| v.as_f64()),
                             max: cs.max.as_ref().and_then(|v| v.as_f64()),
-                            null_frac: if rows > 0.0 { cs.null_count as f64 / rows } else { 0.0 },
+                            null_frac: if rows > 0.0 {
+                                cs.null_count as f64 / rows
+                            } else {
+                                0.0
+                            },
                         },
                     );
                 }
@@ -141,7 +145,11 @@ pub fn estimate(plan: &LogicalPlan) -> Estimate {
                     .unwrap_or(1.0);
                 let unmatched = l.rows * (1.0 - matched);
                 est.rows = (est.rows + unmatched).max(l.rows);
-                let null_frac = if est.rows > 0.0 { unmatched / est.rows } else { 0.0 };
+                let null_frac = if est.rows > 0.0 {
+                    unmatched / est.rows
+                } else {
+                    0.0
+                };
                 for id in r.cols.keys() {
                     if let Some(s) = est.cols.get_mut(id) {
                         s.null_frac = s.null_frac.max(null_frac);
@@ -150,7 +158,11 @@ pub fn estimate(plan: &LogicalPlan) -> Estimate {
             }
             est
         }
-        LogicalPlan::Aggregate { input, group_by, aggs } => {
+        LogicalPlan::Aggregate {
+            input,
+            group_by,
+            aggs,
+        } => {
             let inner = estimate(input);
             let rows = if group_by.is_empty() {
                 1.0
@@ -243,7 +255,11 @@ pub fn selectivity(pred: &Expr, est: &Estimate) -> f64 {
                 LIKE_SELECTIVITY
             }
         }
-        Expr::InList { expr, list, negated } => {
+        Expr::InList {
+            expr,
+            list,
+            negated,
+        } => {
             let s = (list.len() as f64 / est.ndv(expr)).min(1.0);
             if *negated {
                 1.0 - s

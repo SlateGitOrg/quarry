@@ -105,7 +105,9 @@ fn features_match_sqlite() {
     let mut failures = Vec::new();
     for (i, (sql, ordered)) in QUERIES.iter().enumerate() {
         let label = format!("feature #{i}: {sql}");
-        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| check(fx, &label, sql, *ordered))) {
+        if let Err(e) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            check(fx, &label, sql, *ordered)
+        })) {
             let msg = e
                 .downcast_ref::<String>()
                 .cloned()
@@ -114,7 +116,13 @@ fn features_match_sqlite() {
             failures.push(msg);
         }
     }
-    assert!(failures.is_empty(), "{} of {} failed:\n{}", failures.len(), QUERIES.len(), failures.join("\n\n"));
+    assert!(
+        failures.is_empty(),
+        "{} of {} failed:\n{}",
+        failures.len(),
+        QUERIES.len(),
+        failures.join("\n\n")
+    );
 }
 
 /// The same answers must come back with every optimizer rule disabled: the
@@ -131,10 +139,29 @@ fn optimizer_rules_do_not_change_results() {
         plain.set_disabled_rules(vec![rule.to_string()]).unwrap();
         for (sql, ordered) in QUERIES {
             let a = common::quarry_rows(&fx.engine.sql(sql).unwrap());
-            let b = common::quarry_rows(&plain.sql(sql).unwrap_or_else(|e| panic!("{rule}: {sql}: {e}")));
+            let b = common::quarry_rows(
+                &plain
+                    .sql(sql)
+                    .unwrap_or_else(|e| panic!("{rule}: {sql}: {e}")),
+            );
             common::compare(&format!("without {rule}: {sql}"), a, b, *ordered);
         }
     }
+}
+
+/// Twelve relations exceed the DP limit, so this exercises the greedy orderer.
+#[test]
+fn wide_join_uses_greedy_ordering() {
+    let fx = fixture();
+    let mut sql = String::from("SELECT count(*), sum(u1.a), min(u12.x) FROM u u1");
+    for i in 2..=12 {
+        sql.push_str(&format!(" JOIN u u{i} ON u{}.id = u{i}.id", i - 1));
+    }
+    sql.push_str(" WHERE u1.a > 10");
+    check(fx, "12-way join", &sql, false);
+    let plan = fx.engine.optimized_plan(&sql).unwrap().to_string();
+    assert_eq!(plan.matches("InnerJoin").count(), 11, "{plan}");
+    assert!(!plan.contains("CrossJoin"), "{plan}");
 }
 
 #[test]
@@ -142,17 +169,35 @@ fn quarry_only_features() {
     let fx = fixture();
     let rows = |sql: &str| common::quarry_rows(&fx.engine.sql(sql).unwrap());
     // Derived-table column aliases.
-    assert_eq!(rows("SELECT k FROM (SELECT g FROM t WHERE g = 'x' LIMIT 1) AS d (k)").len(), 1);
+    assert_eq!(
+        rows("SELECT k FROM (SELECT g FROM t WHERE g = 'x' LIMIT 1) AS d (k)").len(),
+        1
+    );
     // Date arithmetic on columns, checked against an equivalent day-count predicate.
     let a = rows("SELECT count(*) FROM t WHERE d + INTERVAL '10' DAY > DATE '1995-12-01'");
     let b = rows("SELECT count(*) FROM t WHERE d > DATE '1995-11-21'");
     common::compare("date add", a, b, true);
     // Month arithmetic clamps to month end.
-    let r = fx.engine.sql("SELECT DATE '2024-01-31' + INTERVAL '1' MONTH AS d").unwrap();
+    let r = fx
+        .engine
+        .sql("SELECT DATE '2024-01-31' + INTERVAL '1' MONTH AS d")
+        .unwrap();
     assert!(r.to_string().contains("2024-02-29"), "{r}");
     // round()
     let r = rows("SELECT round(2.5), round(-2.5), round(1.2345, 2)");
-    common::compare("round", r, vec![vec![common::V::Float(3.0), common::V::Float(-3.0), common::V::Float(1.23)]], true);
+    common::compare(
+        "round",
+        r,
+        vec![vec![
+            common::V::Float(3.0),
+            common::V::Float(-3.0),
+            common::V::Float(1.23),
+        ]],
+        true,
+    );
     // count(*) over a zero-column projection.
-    assert_eq!(rows("SELECT count(*) FROM (SELECT 1 AS one FROM t) AS q")[0].len(), 1);
+    assert_eq!(
+        rows("SELECT count(*) FROM (SELECT 1 AS one FROM t) AS q")[0].len(),
+        1
+    );
 }

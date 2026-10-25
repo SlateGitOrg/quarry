@@ -156,14 +156,19 @@ impl ScalarValue {
         let any = array.as_any();
         Ok(match array.data_type() {
             ArrowType::Boolean => ScalarValue::Boolean(Some(
-                any.downcast_ref::<BooleanArray>().map(|a| a.value(i)).unwrap_or_default(),
+                any.downcast_ref::<BooleanArray>()
+                    .map(|a| a.value(i))
+                    .unwrap_or_default(),
             )),
-            ArrowType::Int64 => ScalarValue::Int64(any.downcast_ref::<Int64Array>().map(|a| a.value(i))),
+            ArrowType::Int64 => {
+                ScalarValue::Int64(any.downcast_ref::<Int64Array>().map(|a| a.value(i)))
+            }
             ArrowType::Float64 => {
                 ScalarValue::Float64(any.downcast_ref::<Float64Array>().map(|a| a.value(i)))
             }
             ArrowType::Utf8 => ScalarValue::Utf8(
-                any.downcast_ref::<StringArray>().map(|a| a.value(i).to_string()),
+                any.downcast_ref::<StringArray>()
+                    .map(|a| a.value(i).to_string()),
             ),
             ArrowType::Date32 => {
                 ScalarValue::Date32(any.downcast_ref::<Date32Array>().map(|a| a.value(i)))
@@ -333,21 +338,38 @@ mod tests {
 
     #[test]
     fn scalar_display_and_arrays() {
-        assert_eq!(ScalarValue::Utf8(Some("it's".into())).to_string(), "'it''s'");
+        assert_eq!(
+            ScalarValue::Utf8(Some("it's".into())).to_string(),
+            "'it''s'"
+        );
         assert_eq!(ScalarValue::Float64(Some(2.0)).to_string(), "2.0");
         assert_eq!(ScalarValue::Int64(None).to_string(), "NULL");
         let arr = ScalarValue::Date32(Some(5)).to_array(3);
         assert_eq!(arr.len(), 3);
-        assert_eq!(ScalarValue::from_array(arr.as_ref(), 2).unwrap(), ScalarValue::Date32(Some(5)));
+        assert_eq!(
+            ScalarValue::from_array(arr.as_ref(), 2).unwrap(),
+            ScalarValue::Date32(Some(5))
+        );
         let nulls = ScalarValue::Utf8(None).to_array(2);
-        assert!(ScalarValue::from_array(nulls.as_ref(), 0).unwrap().is_null());
+        assert!(ScalarValue::from_array(nulls.as_ref(), 0)
+            .unwrap()
+            .is_null());
     }
 
     #[test]
     fn arrow_type_normalization() {
-        assert_eq!(DataType::from_arrow(&ArrowType::Int32), Some(DataType::Int64));
-        assert_eq!(DataType::from_arrow(&ArrowType::Float32), Some(DataType::Float64));
-        assert_eq!(DataType::from_arrow(&ArrowType::LargeUtf8), Some(DataType::Utf8));
+        assert_eq!(
+            DataType::from_arrow(&ArrowType::Int32),
+            Some(DataType::Int64)
+        );
+        assert_eq!(
+            DataType::from_arrow(&ArrowType::Float32),
+            Some(DataType::Float64)
+        );
+        assert_eq!(
+            DataType::from_arrow(&ArrowType::LargeUtf8),
+            Some(DataType::Utf8)
+        );
         assert_eq!(DataType::from_arrow(&ArrowType::UInt64), None);
         assert_eq!(
             ScalarValue::Int64(Some(1)).partial_cmp_sql(&ScalarValue::Float64(Some(1.5))),

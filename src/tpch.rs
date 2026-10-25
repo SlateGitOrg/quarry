@@ -52,15 +52,44 @@ impl Rng {
     }
 
     fn words(&mut self, n: usize) -> String {
-        (0..n).map(|_| self.pick(WORDS)).collect::<Vec<_>>().join(" ")
+        (0..n)
+            .map(|_| self.pick(WORDS))
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
 const WORDS: &[&str] = &[
-    "furiously", "special", "requests", "pending", "deposits", "carefully", "final", "accounts",
-    "regular", "ideas", "quickly", "express", "packages", "blithely", "ironic", "theodolites",
-    "bold", "foxes", "slyly", "unusual", "instructions", "even", "pinto", "beans", "Customer",
-    "Complaints", "asymptotes", "dependencies", "silent", "platelets",
+    "furiously",
+    "special",
+    "requests",
+    "pending",
+    "deposits",
+    "carefully",
+    "final",
+    "accounts",
+    "regular",
+    "ideas",
+    "quickly",
+    "express",
+    "packages",
+    "blithely",
+    "ironic",
+    "theodolites",
+    "bold",
+    "foxes",
+    "slyly",
+    "unusual",
+    "instructions",
+    "even",
+    "pinto",
+    "beans",
+    "Customer",
+    "Complaints",
+    "asymptotes",
+    "dependencies",
+    "silent",
+    "platelets",
 ];
 
 const REGIONS: [&str; 5] = ["AFRICA", "AMERICA", "ASIA", "EUROPE", "MIDDLE EAST"];
@@ -93,9 +122,20 @@ const NATIONS: [(&str, i64); 25] = [
     ("UNITED STATES", 1),
 ];
 
-const SEGMENTS: &[&str] = &["AUTOMOBILE", "BUILDING", "FURNITURE", "MACHINERY", "HOUSEHOLD"];
+const SEGMENTS: &[&str] = &[
+    "AUTOMOBILE",
+    "BUILDING",
+    "FURNITURE",
+    "MACHINERY",
+    "HOUSEHOLD",
+];
 const PRIORITIES: &[&str] = &["1-URGENT", "2-HIGH", "3-MEDIUM", "4-NOT SPECIFIED", "5-LOW"];
-const INSTRUCTIONS: &[&str] = &["DELIVER IN PERSON", "COLLECT COD", "NONE", "TAKE BACK RETURN"];
+const INSTRUCTIONS: &[&str] = &[
+    "DELIVER IN PERSON",
+    "COLLECT COD",
+    "NONE",
+    "TAKE BACK RETURN",
+];
 const MODES: &[&str] = &["REG AIR", "AIR", "RAIL", "SHIP", "TRUCK", "MAIL", "FOB"];
 const TYPE1: &[&str] = &["STANDARD", "SMALL", "MEDIUM", "LARGE", "ECONOMY", "PROMO"];
 const TYPE2: &[&str] = &["ANODIZED", "BURNISHED", "PLATED", "POLISHED", "BRUSHED"];
@@ -103,14 +143,71 @@ const TYPE3: &[&str] = &["TIN", "NICKEL", "BRASS", "STEEL", "COPPER"];
 const CONT1: &[&str] = &["SM", "LG", "MED", "JUMBO", "WRAP"];
 const CONT2: &[&str] = &["CASE", "BOX", "BAG", "JAR", "PKG", "PACK", "CAN", "DRUM"];
 const COLORS: &[&str] = &[
-    "almond", "antique", "aquamarine", "azure", "beige", "bisque", "black", "blanched", "blue",
-    "blush", "brown", "burlywood", "chartreuse", "chocolate", "coral", "cornflower", "cream",
-    "cyan", "dark", "forest", "frosted", "green", "honeydew", "khaki", "lavender", "lemon",
-    "linen", "magenta", "maroon", "medium", "metallic", "midnight", "navy", "olive", "orange",
-    "orchid", "pale", "peach", "pink", "plum", "powder", "puff", "purple", "red", "rose",
-    "royal", "saddle", "salmon", "sandy", "seashell", "sienna", "sky", "slate", "smoke",
-    "snow", "spring", "steel", "tan", "thistle", "tomato", "turquoise", "violet", "wheat",
-    "white", "yellow",
+    "almond",
+    "antique",
+    "aquamarine",
+    "azure",
+    "beige",
+    "bisque",
+    "black",
+    "blanched",
+    "blue",
+    "blush",
+    "brown",
+    "burlywood",
+    "chartreuse",
+    "chocolate",
+    "coral",
+    "cornflower",
+    "cream",
+    "cyan",
+    "dark",
+    "forest",
+    "frosted",
+    "green",
+    "honeydew",
+    "khaki",
+    "lavender",
+    "lemon",
+    "linen",
+    "magenta",
+    "maroon",
+    "medium",
+    "metallic",
+    "midnight",
+    "navy",
+    "olive",
+    "orange",
+    "orchid",
+    "pale",
+    "peach",
+    "pink",
+    "plum",
+    "powder",
+    "puff",
+    "purple",
+    "red",
+    "rose",
+    "royal",
+    "saddle",
+    "salmon",
+    "sandy",
+    "seashell",
+    "sienna",
+    "sky",
+    "slate",
+    "smoke",
+    "snow",
+    "spring",
+    "steel",
+    "tan",
+    "thistle",
+    "tomato",
+    "turquoise",
+    "violet",
+    "wheat",
+    "white",
+    "yellow",
 ];
 
 /// A generated table.
@@ -147,7 +244,11 @@ fn dates(v: Vec<i32>) -> ArrayRef {
 fn table(name: &'static str, cols: &[(&str, DataType)], arrays: Vec<ArrayRef>) -> Result<Table> {
     let schema = schema(cols);
     let batch = RecordBatch::try_new(Arc::clone(&schema), arrays)?;
-    Ok(Table { name, schema, batch })
+    Ok(Table {
+        name,
+        schema,
+        batch,
+    })
 }
 
 fn scaled(base: f64, sf: f64) -> usize {
@@ -194,7 +295,12 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
     let mut rng = Rng::new(2);
     tables.push(table(
         "nation",
-        &[("n_nationkey", I), ("n_name", S), ("n_regionkey", I), ("n_comment", S)],
+        &[
+            ("n_nationkey", I),
+            ("n_name", S),
+            ("n_regionkey", I),
+            ("n_comment", S),
+        ],
         vec![
             ints((0..25).collect()),
             strs(NATIONS.iter().map(|(n, _)| n.to_string()).collect()),
@@ -206,7 +312,8 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
     let n_supp = scaled(10_000.0, sf) as i64;
     let mut rng = Rng::new(3);
     let mut s_nation = Vec::new();
-    let (mut s_name, mut s_addr, mut s_phone, mut s_bal, mut s_comment) = (vec![], vec![], vec![], vec![], vec![]);
+    let (mut s_name, mut s_addr, mut s_phone, mut s_bal, mut s_comment) =
+        (vec![], vec![], vec![], vec![], vec![]);
     for k in 1..=n_supp {
         let nk = rng.range(0, 24);
         s_name.push(format!("Supplier#{k:09}"));
@@ -280,14 +387,41 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
 
     let n_part = scaled(200_000.0, sf) as i64;
     let mut rng = Rng::new(5);
-    let (mut p_name, mut p_mfgr, mut p_brand, mut p_type, mut p_size, mut p_cont, mut p_price, mut p_comment) =
-        (vec![], vec![], vec![], vec![], vec![], vec![], vec![], vec![]);
+    let (
+        mut p_name,
+        mut p_mfgr,
+        mut p_brand,
+        mut p_type,
+        mut p_size,
+        mut p_cont,
+        mut p_price,
+        mut p_comment,
+    ) = (
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+        vec![],
+    );
     for k in 1..=n_part {
-        p_name.push((0..5).map(|_| rng.pick(COLORS)).collect::<Vec<_>>().join(" "));
+        p_name.push(
+            (0..5)
+                .map(|_| rng.pick(COLORS))
+                .collect::<Vec<_>>()
+                .join(" "),
+        );
         let m = rng.range(1, 5);
         p_mfgr.push(format!("Manufacturer#{m}"));
         p_brand.push(format!("Brand#{m}{}", rng.range(1, 5)));
-        p_type.push(format!("{} {} {}", rng.pick(TYPE1), rng.pick(TYPE2), rng.pick(TYPE3)));
+        p_type.push(format!(
+            "{} {} {}",
+            rng.pick(TYPE1),
+            rng.pick(TYPE2),
+            rng.pick(TYPE3)
+        ));
         p_size.push(rng.range(1, 50));
         p_cont.push(format!("{} {}", rng.pick(CONT1), rng.pick(CONT2)));
         p_price.push(retail_price(k));
@@ -321,7 +455,8 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
     )?);
 
     let mut rng = Rng::new(6);
-    let (mut ps_part, mut ps_supp, mut ps_qty, mut ps_cost, mut ps_comment) = (vec![], vec![], vec![], vec![], vec![]);
+    let (mut ps_part, mut ps_supp, mut ps_qty, mut ps_cost, mut ps_comment) =
+        (vec![], vec![], vec![], vec![], vec![]);
     for p in 1..=n_part {
         for i in 0..4 {
             ps_part.push(p);
@@ -341,7 +476,13 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
             ("ps_supplycost", F),
             ("ps_comment", S),
         ],
-        vec![ints(ps_part), ints(ps_supp), ints(ps_qty), floats(ps_cost), strs(ps_comment)],
+        vec![
+            ints(ps_part),
+            ints(ps_supp),
+            ints(ps_qty),
+            floats(ps_cost),
+            strs(ps_comment),
+        ],
     )?);
 
     // Orders and lineitems are generated together (status and total price derive from lines).
@@ -373,7 +514,11 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
             let commit = odate + rng.range(30, 90) as i32;
             let receipt = ship + rng.range(1, 30) as i32;
             let rflag = if receipt <= current {
-                if rng.range(0, 1) == 0 { "R" } else { "A" }
+                if rng.range(0, 1) == 0 {
+                    "R"
+                } else {
+                    "A"
+                }
             } else {
                 "N"
             };
@@ -401,11 +546,23 @@ pub fn generate(sf: f64) -> Result<Vec<Table>> {
         }
         o.orderkey.push(ok);
         o.custkey.push(cust);
-        o.status.push(if all_f { "F" } else if all_o { "O" } else { "P" }.to_string());
+        o.status.push(
+            if all_f {
+                "F"
+            } else if all_o {
+                "O"
+            } else {
+                "P"
+            }
+            .to_string(),
+        );
         o.totalprice.push((total * 100.0).round() / 100.0);
         o.orderdate.push(odate);
         o.priority.push(rng.pick(PRIORITIES).to_string());
-        o.clerk.push(format!("Clerk#{:09}", rng.range(1, (n_orders / 1500).max(1))));
+        o.clerk.push(format!(
+            "Clerk#{:09}",
+            rng.range(1, (n_orders / 1500).max(1))
+        ));
         o.shippriority.push(0);
         let n = rng.range(3, 7) as usize;
         o.comment.push(rng.words(n));
@@ -522,7 +679,12 @@ pub enum FileFormat {
 /// Parquet files use `row_group_rows`-row row groups; `lineitem` is clustered
 /// by `l_shipdate` and `orders` by `o_orderdate` so that date filters can
 /// prune row groups (as a time-partitioned warehouse table would).
-pub fn write_tables(tables: &[Table], dir: &Path, format: FileFormat, row_group_rows: usize) -> Result<()> {
+pub fn write_tables(
+    tables: &[Table],
+    dir: &Path,
+    format: FileFormat,
+    row_group_rows: usize,
+) -> Result<()> {
     std::fs::create_dir_all(dir)?;
     for t in tables {
         match format {
@@ -574,7 +736,10 @@ mod tests {
         let a = generate(0.001).unwrap();
         let b = generate(0.001).unwrap();
         let rows: Vec<(&str, usize)> = a.iter().map(|t| (t.name, t.batch.num_rows())).collect();
-        assert_eq!(rows[..7].iter().map(|r| r.1).collect::<Vec<_>>(), vec![5, 25, 10, 150, 200, 800, 1500]);
+        assert_eq!(
+            rows[..7].iter().map(|r| r.1).collect::<Vec<_>>(),
+            vec![5, 25, 10, 150, 200, 800, 1500]
+        );
         assert!(rows[7].1 >= 1500 && rows[7].1 <= 1500 * 7);
         for (x, y) in a.iter().zip(&b) {
             assert_eq!(x.batch, y.batch, "{} differs between runs", x.name);
@@ -584,7 +749,8 @@ mod tests {
     #[test]
     fn partsupp_suppliers_are_distinct_per_part() {
         for p in 1..200 {
-            let s: std::collections::HashSet<i64> = (0..4).map(|i| supplier_for(p, i, 10)).collect();
+            let s: std::collections::HashSet<i64> =
+                (0..4).map(|i| supplier_for(p, i, 10)).collect();
             assert_eq!(s.len(), 4);
         }
     }

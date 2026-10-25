@@ -133,7 +133,13 @@ impl HashJoinExec {
                 j = build.next[j as usize];
             }
         }
-        let mut candidates = gather(&self.schema, probe, &build.batch, probe_idx.clone(), build_idx.into_iter().map(Some).collect())?;
+        let mut candidates = gather(
+            &self.schema,
+            probe,
+            &build.batch,
+            probe_idx.clone(),
+            build_idx.into_iter().map(Some).collect(),
+        )?;
         let mut matched_probe = probe_idx;
         if let Some(f) = &self.filter {
             let mask = f.evaluate(&candidates)?.into_array(candidates.num_rows());
@@ -150,7 +156,9 @@ impl HashJoinExec {
             for p in &matched_probe {
                 seen[*p as usize] = true;
             }
-            let unmatched: Vec<u32> = (0..probe.num_rows() as u32).filter(|i| !seen[*i as usize]).collect();
+            let unmatched: Vec<u32> = (0..probe.num_rows() as u32)
+                .filter(|i| !seen[*i as usize])
+                .collect();
             if !unmatched.is_empty() {
                 let n = unmatched.len();
                 let extra = gather(&self.schema, probe, &build.batch, unmatched, vec![None; n])?;
@@ -218,7 +226,7 @@ impl Operator for HashJoinExec {
             self.build = Some(build);
             return Ok(None);
         }
-        let result = match self.left.next()? {
+        let result = match self.left.pull()? {
             None => None,
             Some(p) => Some(self.probe(&build, &p)?),
         };
@@ -278,7 +286,13 @@ impl NestedLoopJoinExec {
         }
     }
 
-    fn chunk(&self, probe: &RecordBatch, start: usize, end: usize, build: &RecordBatch) -> Result<RecordBatch> {
+    fn chunk(
+        &self,
+        probe: &RecordBatch,
+        start: usize,
+        end: usize,
+        build: &RecordBatch,
+    ) -> Result<RecordBatch> {
         let m = build.num_rows();
         let mut li = Vec::with_capacity((end - start) * m);
         let mut ri = Vec::with_capacity((end - start) * m);
@@ -305,7 +319,10 @@ impl NestedLoopJoinExec {
             for p in kept {
                 seen[p as usize - start] = true;
             }
-            let unmatched: Vec<u32> = (start..end).filter(|i| !seen[i - start]).map(|i| i as u32).collect();
+            let unmatched: Vec<u32> = (start..end)
+                .filter(|i| !seen[i - start])
+                .map(|i| i as u32)
+                .collect();
             if !unmatched.is_empty() {
                 let n = unmatched.len();
                 let extra = gather(&self.schema, probe, build, unmatched, vec![None; n])?;
@@ -323,13 +340,16 @@ impl Operator for NestedLoopJoinExec {
             let batches = self.right.collect()?;
             self.build = Some(concat_batches(&schema, &batches)?);
         }
-        let build = self.build.take().unwrap_or_else(|| unreachable!("built above"));
+        let build = self
+            .build
+            .take()
+            .unwrap_or_else(|| unreachable!("built above"));
         let result = loop {
             if build.num_rows() == 0 && self.join_type == JoinType::Inner {
                 break None;
             }
             if self.current.is_none() {
-                match self.left.next()? {
+                match self.left.pull()? {
                     None => break None,
                     Some(b) => self.current = Some((b, 0)),
                 }

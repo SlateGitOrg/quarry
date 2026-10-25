@@ -9,10 +9,11 @@
 use std::sync::Arc;
 
 use arrow::array::{
-    Array, ArrayRef, AsArray, BooleanArray, Date32Array, Float64Array, Int64Array, Scalar, StringArray,
+    Array, ArrayRef, AsArray, BooleanArray, Date32Array, Float64Array, Int64Array, Scalar,
+    StringArray,
 };
-use arrow::compute::kernels::{boolean, cmp, numeric, zip::zip};
 use arrow::compute::cast;
+use arrow::compute::kernels::{boolean, cmp, numeric, zip::zip};
 use arrow::datatypes::{Date32Type, Float64Type, Int64Type};
 use arrow::record_batch::RecordBatch;
 
@@ -131,7 +132,12 @@ pub fn create_physical_expr(e: &Expr, input: &[ColumnDef]) -> Result<PhysicalExp
         } => PhysicalExpr::Case {
             branches: branches
                 .iter()
-                .map(|(w, t)| Ok((create_physical_expr(w, input)?, create_physical_expr(t, input)?)))
+                .map(|(w, t)| {
+                    Ok((
+                        create_physical_expr(w, input)?,
+                        create_physical_expr(t, input)?,
+                    ))
+                })
                 .collect::<Result<_>>()?,
             else_expr: else_expr.as_deref().map(rec).transpose()?,
             data_type: *data_type,
@@ -179,15 +185,21 @@ fn scalar_datum(s: &ScalarValue) -> Scalar<ArrayRef> {
 }
 
 /// Apply a two-argument Datum kernel, keeping scalar ⊕ scalar as a scalar.
-fn apply_datum(
-    l: &ColumnarValue,
-    r: &ColumnarValue,
-    f: &dyn Fn(&dyn arrow::array::Datum, &dyn arrow::array::Datum) -> std::result::Result<ArrayRef, arrow::error::ArrowError>,
-) -> Result<ColumnarValue> {
+/// A two-argument Arrow kernel taking scalars or arrays.
+type DatumKernel = dyn Fn(
+    &dyn arrow::array::Datum,
+    &dyn arrow::array::Datum,
+) -> std::result::Result<ArrayRef, arrow::error::ArrowError>;
+
+fn apply_datum(l: &ColumnarValue, r: &ColumnarValue, f: &DatumKernel) -> Result<ColumnarValue> {
     Ok(match (l, r) {
         (ColumnarValue::Array(a), ColumnarValue::Array(b)) => ColumnarValue::Array(f(a, b)?),
-        (ColumnarValue::Array(a), ColumnarValue::Scalar(s)) => ColumnarValue::Array(f(a, &scalar_datum(s))?),
-        (ColumnarValue::Scalar(s), ColumnarValue::Array(b)) => ColumnarValue::Array(f(&scalar_datum(s), b)?),
+        (ColumnarValue::Array(a), ColumnarValue::Scalar(s)) => {
+            ColumnarValue::Array(f(a, &scalar_datum(s))?)
+        }
+        (ColumnarValue::Scalar(s), ColumnarValue::Array(b)) => {
+            ColumnarValue::Array(f(&scalar_datum(s), b)?)
+        }
         (ColumnarValue::Scalar(a), ColumnarValue::Scalar(b)) => {
             let out = f(&scalar_datum(a), &scalar_datum(b))?;
             ColumnarValue::Scalar(ScalarValue::from_array(out.as_ref(), 0)?)
@@ -196,21 +208,33 @@ fn apply_datum(
 }
 
 fn bool_result(
-    f: fn(&dyn arrow::array::Datum, &dyn arrow::array::Datum) -> std::result::Result<BooleanArray, arrow::error::ArrowError>,
-) -> impl Fn(&dyn arrow::array::Datum, &dyn arrow::array::Datum) -> std::result::Result<ArrayRef, arrow::error::ArrowError> {
+    f: fn(
+        &dyn arrow::array::Datum,
+        &dyn arrow::array::Datum,
+    ) -> std::result::Result<BooleanArray, arrow::error::ArrowError>,
+) -> impl Fn(
+    &dyn arrow::array::Datum,
+    &dyn arrow::array::Datum,
+) -> std::result::Result<ArrayRef, arrow::error::ArrowError> {
     move |a, b| f(a, b).map(|x| Arc::new(x) as ArrayRef)
 }
 
 /// Element-wise map over one or two arrays where scalars are broadcast.
 fn both_arrays(l: ColumnarValue, r: ColumnarValue, n: usize) -> (ArrayRef, ArrayRef, bool) {
-    let scalar = matches!((&l, &r), (ColumnarValue::Scalar(_), ColumnarValue::Scalar(_)));
+    let scalar = matches!(
+        (&l, &r),
+        (ColumnarValue::Scalar(_), ColumnarValue::Scalar(_))
+    );
     let len = if scalar { 1 } else { n };
     (l.into_array(len), r.into_array(len), scalar)
 }
 
 fn wrap(arr: ArrayRef, scalar: bool) -> Result<ColumnarValue> {
     if scalar {
-        Ok(ColumnarValue::Scalar(ScalarValue::from_array(arr.as_ref(), 0)?))
+        Ok(ColumnarValue::Scalar(ScalarValue::from_array(
+            arr.as_ref(),
+            0,
+        )?))
     } else {
         Ok(ColumnarValue::Array(arr))
     }
@@ -231,7 +255,9 @@ impl PhysicalExpr {
             PhysicalExpr::Not(x) => map_unary(x.evaluate(batch)?, |a| {
                 Ok(Arc::new(boolean::not(a.as_boolean())?) as ArrayRef)
             }),
-            PhysicalExpr::Negative(x) => map_unary(x.evaluate(batch)?, |a| Ok(numeric::neg(a.as_ref())?)),
+            PhysicalExpr::Negative(x) => {
+                map_unary(x.evaluate(batch)?, |a| Ok(numeric::neg(a.as_ref())?))
+            }
             PhysicalExpr::IsNull(x) => map_unary(x.evaluate(batch)?, |a| {
                 Ok(Arc::new(boolean::is_null(a.as_ref())?) as ArrayRef)
             }),
@@ -268,7 +294,9 @@ impl PhysicalExpr {
                 }
                 let acc = acc.ok_or_else(|| QuarryError::Plan("empty IN list".into()))?;
                 if *negated {
-                    map_unary(acc, |a| Ok(Arc::new(boolean::not(a.as_boolean())?) as ArrayRef))
+                    map_unary(acc, |a| {
+                        Ok(Arc::new(boolean::not(a.as_boolean())?) as ArrayRef)
+                    })
                 } else {
                     Ok(acc)
                 }
@@ -312,7 +340,12 @@ fn map_unary(v: ColumnarValue, f: impl Fn(ArrayRef) -> Result<ArrayRef>) -> Resu
     }
 }
 
-fn eval_binary(l: ColumnarValue, op: BinaryOp, r: ColumnarValue, n: usize) -> Result<ColumnarValue> {
+fn eval_binary(
+    l: ColumnarValue,
+    op: BinaryOp,
+    r: ColumnarValue,
+    n: usize,
+) -> Result<ColumnarValue> {
     match op {
         BinaryOp::Eq => apply_datum(&l, &r, &bool_result(cmp::eq)),
         BinaryOp::NotEq => apply_datum(&l, &r, &bool_result(cmp::neq)),
@@ -384,7 +417,10 @@ fn divide(a: &ArrayRef, b: &ArrayRef, modulo: bool) -> Result<ArrayRef> {
             Ok(Arc::new(out))
         }
         arrow::datatypes::DataType::Float64 => {
-            let (x, y) = (a.as_primitive::<Float64Type>(), b.as_primitive::<Float64Type>());
+            let (x, y) = (
+                a.as_primitive::<Float64Type>(),
+                b.as_primitive::<Float64Type>(),
+            );
             let out: Float64Array = x
                 .iter()
                 .zip(y.iter())
@@ -447,7 +483,10 @@ fn eval_function(func: ScalarFunc, args: Vec<ColumnarValue>, n: usize) -> Result
         }
         ScalarFunc::Length => {
             let a = arrays[0].as_string::<i32>();
-            let out: Int64Array = a.iter().map(|v| v.map(|s| s.chars().count() as i64)).collect();
+            let out: Int64Array = a
+                .iter()
+                .map(|v| v.map(|s| s.chars().count() as i64))
+                .collect();
             Arc::new(out)
         }
         ScalarFunc::Substr => {
@@ -459,14 +498,20 @@ fn eval_function(func: ScalarFunc, args: Vec<ColumnarValue>, n: usize) -> Result
                     if s.is_null(i) || start.is_null(i) || count.is_some_and(|c| c.is_null(i)) {
                         return None;
                     }
-                    Some(substr(s.value(i), start.value(i), count.map(|c| c.value(i))))
+                    Some(substr(
+                        s.value(i),
+                        start.value(i),
+                        count.map(|c| c.value(i)),
+                    ))
                 })
                 .collect();
             Arc::new(out)
         }
         ScalarFunc::Coalesce => {
             let mut iter = arrays.into_iter().rev();
-            let mut acc = iter.next().ok_or_else(|| QuarryError::Plan("coalesce() without arguments".into()))?;
+            let mut acc = iter
+                .next()
+                .ok_or_else(|| QuarryError::Plan("coalesce() without arguments".into()))?;
             for a in iter {
                 let mask = boolean::is_not_null(a.as_ref())?;
                 acc = zip(&mask, &a, &acc)?;
@@ -548,25 +593,39 @@ mod tests {
             schema,
             vec![
                 Arc::new(Int64Array::from(vec![Some(7), Some(-3), None, Some(0)])),
-                Arc::new(StringArray::from(vec![Some("hello"), Some("World"), None, Some("")])),
-                Arc::new(Float64Array::from(vec![Some(1.25), Some(-2.5), Some(0.0), None])),
+                Arc::new(StringArray::from(vec![
+                    Some("hello"),
+                    Some("World"),
+                    None,
+                    Some(""),
+                ])),
+                Arc::new(Float64Array::from(vec![
+                    Some(1.25),
+                    Some(-2.5),
+                    Some(0.0),
+                    None,
+                ])),
             ],
         )
         .unwrap()
     }
 
     fn defs() -> Vec<ColumnDef> {
-        [("a", DataType::Int64), ("s", DataType::Utf8), ("f", DataType::Float64)]
-            .iter()
-            .enumerate()
-            .map(|(i, (n, t))| ColumnDef {
-                id: i + 1,
-                name: n.to_string(),
-                qualifier: None,
-                data_type: *t,
-                nullable: true,
-            })
-            .collect()
+        [
+            ("a", DataType::Int64),
+            ("s", DataType::Utf8),
+            ("f", DataType::Float64),
+        ]
+        .iter()
+        .enumerate()
+        .map(|(i, (n, t))| ColumnDef {
+            id: i + 1,
+            name: n.to_string(),
+            qualifier: None,
+            data_type: *t,
+            nullable: true,
+        })
+        .collect()
     }
 
     fn col(i: usize) -> Expr {
@@ -585,8 +644,14 @@ mod tests {
 
     fn eval(e: &Expr) -> Vec<ScalarValue> {
         let b = batch();
-        let arr = create_physical_expr(e, &defs()).unwrap().evaluate(&b).unwrap().into_array(b.num_rows());
-        (0..arr.len()).map(|i| ScalarValue::from_array(arr.as_ref(), i).unwrap()).collect()
+        let arr = create_physical_expr(e, &defs())
+            .unwrap()
+            .evaluate(&b)
+            .unwrap()
+            .into_array(b.num_rows());
+        (0..arr.len())
+            .map(|i| ScalarValue::from_array(arr.as_ref(), i).unwrap())
+            .collect()
     }
 
     fn ints(v: &[Option<i64>]) -> Vec<ScalarValue> {
@@ -608,9 +673,17 @@ mod tests {
     #[test]
     fn three_valued_logic() {
         let gt = Expr::binary(col(0), BinaryOp::Gt, int(0));
-        let or = Expr::binary(gt.clone(), BinaryOp::Or, Expr::Literal(ScalarValue::Boolean(Some(true))));
+        let or = Expr::binary(
+            gt.clone(),
+            BinaryOp::Or,
+            Expr::Literal(ScalarValue::Boolean(Some(true))),
+        );
         assert_eq!(eval(&or), bools(&[Some(true); 4]));
-        let and = Expr::binary(gt, BinaryOp::And, Expr::Literal(ScalarValue::Boolean(Some(false))));
+        let and = Expr::binary(
+            gt,
+            BinaryOp::And,
+            Expr::Literal(ScalarValue::Boolean(Some(false))),
+        );
         assert_eq!(eval(&and), bools(&[Some(false); 4]));
         let inl = Expr::InList {
             expr: Box::new(col(0)),
@@ -647,20 +720,40 @@ mod tests {
                 data_type: DataType::Utf8,
             })
         };
-        let s = |v: &[Option<&str>]| v.iter().map(|x| ScalarValue::Utf8(x.map(String::from))).collect::<Vec<_>>();
-        assert_eq!(f(ScalarFunc::Upper, vec![]), s(&[Some("HELLO"), Some("WORLD"), None, Some("")]));
-        assert_eq!(f(ScalarFunc::Substr, vec![int(2), int(3)]), s(&[Some("ell"), Some("orl"), None, Some("")]));
+        let s = |v: &[Option<&str>]| {
+            v.iter()
+                .map(|x| ScalarValue::Utf8(x.map(String::from)))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            f(ScalarFunc::Upper, vec![]),
+            s(&[Some("HELLO"), Some("WORLD"), None, Some("")])
+        );
+        assert_eq!(
+            f(ScalarFunc::Substr, vec![int(2), int(3)]),
+            s(&[Some("ell"), Some("orl"), None, Some("")])
+        );
         assert_eq!(substr("hello", 0, Some(2)), "h");
         assert_eq!(substr("hello", 4, None), "lo");
         assert_eq!(substr("hello", 2, Some(-1)), "");
-        let concat = Expr::binary(col(1), BinaryOp::Concat, Expr::Literal(ScalarValue::Utf8(Some("!".into()))));
-        assert_eq!(eval(&concat), s(&[Some("hello!"), Some("World!"), None, Some("!")]));
+        let concat = Expr::binary(
+            col(1),
+            BinaryOp::Concat,
+            Expr::Literal(ScalarValue::Utf8(Some("!".into()))),
+        );
+        assert_eq!(
+            eval(&concat),
+            s(&[Some("hello!"), Some("World!"), None, Some("!")])
+        );
         let like = Expr::Like {
             expr: Box::new(col(1)),
             pattern: Box::new(Expr::Literal(ScalarValue::Utf8(Some("%o%".into())))),
             negated: false,
         };
-        assert_eq!(eval(&like), bools(&[Some(true), Some(true), None, Some(false)]));
+        assert_eq!(
+            eval(&like),
+            bools(&[Some(true), Some(true), None, Some(false)])
+        );
     }
 
     #[test]
@@ -668,11 +761,19 @@ mod tests {
         let e = Expr::binary(int(2), BinaryOp::Multiply, int(21));
         assert_eq!(evaluate_constant(&e).unwrap(), ScalarValue::Int64(Some(42)));
         let date = Expr::Function {
-            func: ScalarFunc::DateAdd { months: 12, days: 0 },
-            args: vec![Expr::Literal(ScalarValue::Date32(crate::types::parse_date("1994-01-01")))],
+            func: ScalarFunc::DateAdd {
+                months: 12,
+                days: 0,
+            },
+            args: vec![Expr::Literal(ScalarValue::Date32(
+                crate::types::parse_date("1994-01-01"),
+            ))],
             data_type: DataType::Date32,
         };
-        assert_eq!(evaluate_constant(&date).unwrap(), ScalarValue::Date32(crate::types::parse_date("1995-01-01")));
+        assert_eq!(
+            evaluate_constant(&date).unwrap(),
+            ScalarValue::Date32(crate::types::parse_date("1995-01-01"))
+        );
         let overflow = Expr::binary(int(i64::MAX), BinaryOp::Plus, int(1));
         assert!(evaluate_constant(&overflow).is_err());
         assert!(evaluate_constant(&col(0)).is_err());
@@ -681,6 +782,9 @@ mod tests {
             args: vec![Expr::Literal(ScalarValue::Float64(Some(1.2345))), int(2)],
             data_type: DataType::Float64,
         };
-        assert_eq!(evaluate_constant(&round).unwrap(), ScalarValue::Float64(Some(1.23)));
+        assert_eq!(
+            evaluate_constant(&round).unwrap(),
+            ScalarValue::Float64(Some(1.23))
+        );
     }
 }

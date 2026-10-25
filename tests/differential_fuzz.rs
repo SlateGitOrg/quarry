@@ -101,14 +101,19 @@ impl Gen {
                     )
                 }
                 4 => {
-                    let pat = ["a%", "%a%", "_", "%e", "b_c", "", "%"][self.rng.range(0, 6) as usize];
+                    let pat =
+                        ["a%", "%a%", "_", "%e", "b_c", "", "%"][self.rng.range(0, 6) as usize];
                     format!(
                         "{}s {}LIKE '{pat}'",
                         q,
                         if self.chance(30) { "NOT " } else { "" }
                     )
                 }
-                5 => format!("{}g = '{}'", q, ["x", "y", "z"][self.rng.range(0, 2) as usize]),
+                5 => format!(
+                    "{}g = '{}'",
+                    q,
+                    ["x", "y", "z"][self.rng.range(0, 2) as usize]
+                ),
                 _ => format!("{}f > {}", q, self.rng.range(-8, 8)),
             };
         }
@@ -124,7 +129,12 @@ impl Gen {
             0 => {
                 self.q = "";
                 let order = self.chance(30);
-                let mut sql = format!("SELECT id, {}, {} FROM t WHERE {}", self.num(3), self.pred(2), self.pred(3));
+                let mut sql = format!(
+                    "SELECT id, {}, {} FROM t WHERE {}",
+                    self.num(3),
+                    self.pred(2),
+                    self.pred(3)
+                );
                 if order {
                     sql.push_str(&format!(" ORDER BY 2, id LIMIT {}", self.rng.range(0, 40)));
                 }
@@ -133,7 +143,11 @@ impl Gen {
             1 => {
                 self.q = "";
                 let agg = ["sum", "min", "max", "count", "avg"][self.rng.range(0, 4) as usize];
-                let distinct = if agg != "avg" && self.chance(20) { "DISTINCT " } else { "" };
+                let distinct = if agg != "avg" && self.chance(20) {
+                    "DISTINCT "
+                } else {
+                    ""
+                };
                 let mut sql = format!(
                     "SELECT g, {agg}({distinct}{}), count(*), sum({}) FROM t WHERE {} GROUP BY g",
                     self.num(2),

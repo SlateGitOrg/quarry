@@ -23,11 +23,54 @@ use crate::error::{QuarryError, Result};
 
 /// Words that may never be used as an implicit alias or bare column name.
 const RESERVED: &[&str] = &[
-    "select", "from", "where", "group", "having", "order", "limit", "offset", "join", "inner",
-    "left", "right", "full", "outer", "cross", "on", "as", "and", "or", "not", "union", "with",
-    "by", "asc", "desc", "nulls", "is", "in", "like", "between", "case", "when", "then", "else",
-    "end", "distinct", "null", "true", "false", "cast", "extract", "interval", "exists", "all",
-    "using", "natural", "except", "intersect",
+    "select",
+    "from",
+    "where",
+    "group",
+    "having",
+    "order",
+    "limit",
+    "offset",
+    "join",
+    "inner",
+    "left",
+    "right",
+    "full",
+    "outer",
+    "cross",
+    "on",
+    "as",
+    "and",
+    "or",
+    "not",
+    "union",
+    "with",
+    "by",
+    "asc",
+    "desc",
+    "nulls",
+    "is",
+    "in",
+    "like",
+    "between",
+    "case",
+    "when",
+    "then",
+    "else",
+    "end",
+    "distinct",
+    "null",
+    "true",
+    "false",
+    "cast",
+    "extract",
+    "interval",
+    "exists",
+    "all",
+    "using",
+    "natural",
+    "except",
+    "intersect",
 ];
 
 const BP_OR: u8 = 1;
@@ -455,7 +498,9 @@ impl Parser {
         loop {
             // Postfix / special infix forms at comparison precedence.
             let negated_form = self.is_kw("not")
-                && (self.is_kw_at(1, "between") || self.is_kw_at(1, "in") || self.is_kw_at(1, "like"));
+                && (self.is_kw_at(1, "between")
+                    || self.is_kw_at(1, "in")
+                    || self.is_kw_at(1, "like"));
             if (negated_form
                 || self.is_kw("is")
                 || self.is_kw("between")
@@ -467,8 +512,14 @@ impl Parser {
                 continue;
             }
             let (op, bp) = match self.peek() {
-                Token::Ident { value, quoted: false } if value == "or" => (BinaryOp::Or, BP_OR),
-                Token::Ident { value, quoted: false } if value == "and" => (BinaryOp::And, BP_AND),
+                Token::Ident {
+                    value,
+                    quoted: false,
+                } if value == "or" => (BinaryOp::Or, BP_OR),
+                Token::Ident {
+                    value,
+                    quoted: false,
+                } if value == "and" => (BinaryOp::And, BP_AND),
                 Token::Eq => (BinaryOp::Eq, BP_CMP),
                 Token::NotEq => (BinaryOp::NotEq, BP_CMP),
                 Token::Lt => (BinaryOp::Lt, BP_CMP),
@@ -549,7 +600,9 @@ impl Parser {
         match self.peek().clone() {
             Token::Number(n) => {
                 self.advance();
-                number_literal(&n).map(Expr::Literal).or_else(|m| self.error(m))
+                number_literal(&n)
+                    .map(Expr::Literal)
+                    .or_else(|m| self.error(m))
             }
             Token::Str(s) => {
                 self.advance();
@@ -582,7 +635,10 @@ impl Parser {
                 self.advance();
                 self.expr_bp(BP_UNARY)
             }
-            Token::Ident { value, quoted: false } => self.keyword_or_identifier(&value),
+            Token::Ident {
+                value,
+                quoted: false,
+            } => self.keyword_or_identifier(&value),
             Token::Ident { .. } => self.identifier_expr(),
             _ => self.unexpected("an expression"),
         }
@@ -671,7 +727,10 @@ impl Parser {
         let unit_word = match parts.next() {
             Some(u) => u.to_ascii_lowercase(),
             None => match self.advance() {
-                Token::Ident { value, quoted: false } => value,
+                Token::Ident {
+                    value,
+                    quoted: false,
+                } => value,
                 _ => return self.error("expected interval unit DAY, MONTH or YEAR"),
             },
         };
@@ -716,7 +775,10 @@ impl Parser {
 
     fn type_name(&mut self) -> Result<TypeName> {
         let word = match self.advance() {
-            Token::Ident { value, quoted: false } => value,
+            Token::Ident {
+                value,
+                quoted: false,
+            } => value,
             _ => return self.error("expected a type name"),
         };
         let t = match word.as_str() {
@@ -840,7 +902,10 @@ mod tests {
         assert_eq!(expr("-(a * b)"), "-(a * b)");
         assert_eq!(expr("a || b = c"), "a || b = c");
         assert_eq!(expr("x BETWEEN 1 AND 2 AND y"), "x BETWEEN 1 AND 2 AND y");
-        assert_eq!(expr("x NOT IN (1, 2) OR y IS NOT NULL"), "x NOT IN (1, 2) OR y IS NOT NULL");
+        assert_eq!(
+            expr("x NOT IN (1, 2) OR y IS NOT NULL"),
+            "x NOT IN (1, 2) OR y IS NOT NULL"
+        );
         assert_eq!(expr("s NOT LIKE 'a%'"), "s NOT LIKE 'a%'");
         assert_eq!(expr("-5"), "-5");
         assert_eq!(expr("+5"), "5");
@@ -855,7 +920,10 @@ mod tests {
         assert_eq!(expr("CASE a WHEN 1 THEN 2 END"), "CASE a WHEN 1 THEN 2 END");
         assert_eq!(expr("CAST(x AS DECIMAL(12,2))"), "CAST(x AS Double)");
         assert_eq!(expr("EXTRACT(YEAR FROM d)"), "EXTRACT(Year FROM d)");
-        assert_eq!(expr("DATE '1995-01-01' + INTERVAL '3' MONTH"), "DATE '1995-01-01' + INTERVAL '3' MONTH");
+        assert_eq!(
+            expr("DATE '1995-01-01' + INTERVAL '3' MONTH"),
+            "DATE '1995-01-01' + INTERVAL '3' MONTH"
+        );
         assert_eq!(expr("INTERVAL '1 year'"), "INTERVAL '1' YEAR");
         assert_eq!(expr("count(DISTINCT a)"), "count(DISTINCT a)");
         assert_eq!(expr("count(*)"), "count(*)");
@@ -882,7 +950,9 @@ mod tests {
             joins.iter().map(|j| j.kind).collect::<Vec<_>>(),
             vec![JoinKind::Inner, JoinKind::Left, JoinKind::Cross]
         );
-        assert!(matches!(&q.body.from[1].relation, TableFactor::Derived { alias, columns, .. } if alias == "d" && columns == &vec!["o".to_string()]));
+        assert!(
+            matches!(&q.body.from[1].relation, TableFactor::Derived { alias, columns, .. } if alias == "d" && columns == &vec!["o".to_string()])
+        );
         assert_eq!(q.body.group_by.len(), 2);
         assert!(q.body.having.is_some());
         assert_eq!(q.order_by.len(), 2);
@@ -895,29 +965,59 @@ mod tests {
     fn explain_variants() {
         assert!(matches!(
             parse_statement("EXPLAIN ANALYZE SELECT 1").unwrap(),
-            Statement::Explain { analyze: true, verbose: false, .. }
+            Statement::Explain {
+                analyze: true,
+                verbose: false,
+                ..
+            }
         ));
         assert!(matches!(
             parse_statement("explain verbose select 1").unwrap(),
-            Statement::Explain { analyze: false, verbose: true, .. }
+            Statement::Explain {
+                analyze: false,
+                verbose: true,
+                ..
+            }
         ));
     }
 
     #[test]
     fn errors_carry_positions() {
         match parse_statement("SELECT a FROM t WHERE") {
-            Err(QuarryError::Parse { message, line, column }) => {
+            Err(QuarryError::Parse {
+                message,
+                line,
+                column,
+            }) => {
                 assert_eq!((line, column), (1, 22));
                 assert!(message.contains("expected an expression"), "{message}");
             }
             other => panic!("unexpected {other:?}"),
         }
-        assert!(matches!(parse_statement("SELECT 1 2"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(parse_statement("SELECT FROM t"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(parse_statement("UPDATE t SET a = 1"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(parse_statement("SELECT * FROM (SELECT 1)"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(parse_statement("SELECT * FROM t LIMIT -1"), Err(QuarryError::Parse { .. })));
-        assert!(matches!(parse_statement("SELECT a.b.c FROM t"), Err(QuarryError::Parse { .. })));
+        assert!(matches!(
+            parse_statement("SELECT 1 2"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            parse_statement("SELECT FROM t"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            parse_statement("UPDATE t SET a = 1"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            parse_statement("SELECT * FROM (SELECT 1)"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            parse_statement("SELECT * FROM t LIMIT -1"),
+            Err(QuarryError::Parse { .. })
+        ));
+        assert!(matches!(
+            parse_statement("SELECT a.b.c FROM t"),
+            Err(QuarryError::Parse { .. })
+        ));
     }
 
     #[test]

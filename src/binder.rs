@@ -69,7 +69,10 @@ impl Scope {
             }
             if let Some(prev) = found {
                 if prev.def.id != c.def.id {
-                    return bind_err(format!("column reference '{}' is ambiguous", parts.join(".")));
+                    return bind_err(format!(
+                        "column reference '{}' is ambiguous",
+                        parts.join(".")
+                    ));
                 }
             }
             found = Some(c);
@@ -135,7 +138,10 @@ impl<'a> Binder<'a> {
         let saved = self.ctes.len();
         for cte in &q.ctes {
             if q.ctes.iter().filter(|c| c.name == cte.name).count() > 1 {
-                return bind_err(format!("WITH query name '{}' specified more than once", cte.name));
+                return bind_err(format!(
+                    "WITH query name '{}' specified more than once",
+                    cte.name
+                ));
             }
             let def = CteDef {
                 query: (*cte.query).clone(),
@@ -216,7 +222,10 @@ impl<'a> Binder<'a> {
                 projections.push((e, name.clone()));
             }
             let having = match &select.having {
-                Some(h) => Some(expect_boolean(self.bind_post_aggregate(h, &mut ctx)?, "HAVING")?),
+                Some(h) => Some(expect_boolean(
+                    self.bind_post_aggregate(h, &mut ctx)?,
+                    "HAVING",
+                )?),
                 None => None,
             };
             agg_ctx = Some((ctx, having));
@@ -230,7 +239,13 @@ impl<'a> Binder<'a> {
         // they may add hidden columns to it.
         let mut sort_targets = Vec::new();
         for o in order_by {
-            let target = self.bind_order_target(o, &items, &projections, &scope, agg_ctx.as_mut().map(|(c, _)| c))?;
+            let target = self.bind_order_target(
+                o,
+                &items,
+                &projections,
+                &scope,
+                agg_ctx.as_mut().map(|(c, _)| c),
+            )?;
             sort_targets.push((target, o.asc, o.nulls_first.unwrap_or(o.asc)));
         }
 
@@ -260,11 +275,14 @@ impl<'a> Binder<'a> {
                             "for SELECT DISTINCT, ORDER BY expressions must appear in the select list",
                         );
                     }
-                    let pos = projections.iter().position(|(p, _)| p == e).unwrap_or_else(|| {
-                        projections.push((e.clone(), format!("__order{hidden}")));
-                        hidden += 1;
-                        projections.len() - 1
-                    });
+                    let pos = projections
+                        .iter()
+                        .position(|(p, _)| p == e)
+                        .unwrap_or_else(|| {
+                            projections.push((e.clone(), format!("__order{hidden}")));
+                            hidden += 1;
+                            projections.len() - 1
+                        });
                     key_indices.push(pos);
                 }
             }
@@ -407,7 +425,9 @@ impl<'a> Binder<'a> {
             return bind_err("aggregate functions are not allowed in GROUP BY");
         }
         if let ast::Expr::Literal(ast::Literal::Integer(k)) = g {
-            let idx = usize::try_from(*k).ok().filter(|i| *i >= 1 && *i <= items.len());
+            let idx = usize::try_from(*k)
+                .ok()
+                .filter(|i| *i >= 1 && *i <= items.len());
             return match idx {
                 Some(i) => {
                     let item = &items[i - 1].0;
@@ -445,7 +465,10 @@ impl<'a> Binder<'a> {
         agg: Option<&mut AggContext>,
     ) -> Result<OrderTarget> {
         if let ast::Expr::Literal(ast::Literal::Integer(k)) = &o.expr {
-            return match usize::try_from(*k).ok().filter(|i| *i >= 1 && *i <= items.len()) {
+            return match usize::try_from(*k)
+                .ok()
+                .filter(|i| *i >= 1 && *i <= items.len())
+            {
                 Some(i) => Ok(OrderTarget::Output(i - 1)),
                 None => bind_err(format!("ORDER BY position {k} is not in the select list")),
             };
@@ -561,7 +584,10 @@ impl<'a> Binder<'a> {
                 name: label.clone(),
                 def: output,
             });
-            Ok(Some(ast::Expr::Identifier(vec![AGG_QUALIFIER.to_string(), label])))
+            Ok(Some(ast::Expr::Identifier(vec![
+                AGG_QUALIFIER.to_string(),
+                label,
+            ])))
         })
     }
 
@@ -811,12 +837,16 @@ impl<'a> Binder<'a> {
                     .collect::<Result<Vec<_>>>()?;
                 let mut t = x.data_type();
                 for i in &items {
-                    t = common_type(t, i.data_type())
-                        .ok_or_else(|| QuarryError::Type(format!("IN list item {i} is incompatible with {t}")))?;
+                    t = common_type(t, i.data_type()).ok_or_else(|| {
+                        QuarryError::Type(format!("IN list item {i} is incompatible with {t}"))
+                    })?;
                 }
                 Ok(Expr::InList {
                     expr: Box::new(cast_to(x, t)?),
-                    list: items.into_iter().map(|i| cast_to(i, t)).collect::<Result<_>>()?,
+                    list: items
+                        .into_iter()
+                        .map(|i| cast_to(i, t))
+                        .collect::<Result<_>>()?,
                     negated: *negated,
                 })
             }
@@ -826,7 +856,11 @@ impl<'a> Binder<'a> {
                 negated,
             } => {
                 let x = expect_type(self.bind_expr(expr, scope)?, DataType::Utf8, "LIKE")?;
-                let p = expect_type(self.bind_expr(pattern, scope)?, DataType::Utf8, "LIKE pattern")?;
+                let p = expect_type(
+                    self.bind_expr(pattern, scope)?,
+                    DataType::Utf8,
+                    "LIKE pattern",
+                )?;
                 Ok(Expr::Like {
                     expr: Box::new(x),
                     pattern: Box::new(p),
@@ -860,7 +894,10 @@ impl<'a> Binder<'a> {
                 let mut t = DataType::Null;
                 for r in results.iter().chain(else_bound.iter()) {
                     t = common_type(t, r.data_type()).ok_or_else(|| {
-                        QuarryError::Type(format!("CASE branches have incompatible types {t} and {}", r.data_type()))
+                        QuarryError::Type(format!(
+                            "CASE branches have incompatible types {t} and {}",
+                            r.data_type()
+                        ))
                     })?;
                 }
                 let branches = conds
@@ -919,7 +956,13 @@ impl<'a> Binder<'a> {
         }
     }
 
-    fn bind_binary(&mut self, left: &ast::Expr, op: BinaryOp, right: &ast::Expr, scope: &Scope) -> Result<Expr> {
+    fn bind_binary(
+        &mut self,
+        left: &ast::Expr,
+        op: BinaryOp,
+        right: &ast::Expr,
+        scope: &Scope,
+    ) -> Result<Expr> {
         // date +/- INTERVAL is rewritten into a calendar function.
         if matches!(op, BinaryOp::Plus | BinaryOp::Minus) {
             let interval = |e: &ast::Expr| match e {
@@ -979,7 +1022,12 @@ impl<'a> Binder<'a> {
         }
     }
 
-    fn bind_scalar_function(&mut self, name: &str, args: &[ast::Expr], scope: &Scope) -> Result<Expr> {
+    fn bind_scalar_function(
+        &mut self,
+        name: &str,
+        args: &[ast::Expr],
+        scope: &Scope,
+    ) -> Result<Expr> {
         let bound = args
             .iter()
             .map(|a| self.bind_expr(a, scope))
@@ -1001,7 +1049,11 @@ impl<'a> Binder<'a> {
             }
             "lower" | "upper" | "length" | "char_length" => {
                 arity(1, 1)?;
-                let a = expect_type(bound.into_iter().next().unwrap_or_else(|| unreachable!()), DataType::Utf8, name)?;
+                let a = expect_type(
+                    bound.into_iter().next().unwrap_or_else(|| unreachable!()),
+                    DataType::Utf8,
+                    name,
+                )?;
                 let (func, ret) = match name {
                     "lower" => (ScalarFunc::Lower, DataType::Utf8),
                     "upper" => (ScalarFunc::Upper, DataType::Utf8),
@@ -1012,7 +1064,11 @@ impl<'a> Binder<'a> {
             "substr" | "substring" => {
                 arity(2, 3)?;
                 let mut it = bound.into_iter();
-                let mut args = vec![expect_type(it.next().unwrap_or_else(|| unreachable!()), DataType::Utf8, name)?];
+                let mut args = vec![expect_type(
+                    it.next().unwrap_or_else(|| unreachable!()),
+                    DataType::Utf8,
+                    name,
+                )?];
                 for a in it {
                     args.push(expect_type(a, DataType::Int64, name)?);
                 }
@@ -1025,10 +1081,16 @@ impl<'a> Binder<'a> {
                 let mut t = DataType::Null;
                 for a in &bound {
                     t = common_type(t, a.data_type()).ok_or_else(|| {
-                        QuarryError::Type(format!("coalesce() arguments have incompatible types {t} and {}", a.data_type()))
+                        QuarryError::Type(format!(
+                            "coalesce() arguments have incompatible types {t} and {}",
+                            a.data_type()
+                        ))
                     })?;
                 }
-                let args = bound.into_iter().map(|a| cast_to(a, t)).collect::<Result<_>>()?;
+                let args = bound
+                    .into_iter()
+                    .map(|a| cast_to(a, t))
+                    .collect::<Result<_>>()?;
                 (ScalarFunc::Coalesce, args, t)
             }
             "round" => {
@@ -1136,7 +1198,10 @@ fn map_ast(
             negated,
         } => {
             let expr = m(expr)?;
-            let list = list.iter().map(|x| m(x).map(|b| *b)).collect::<Result<_>>()?;
+            let list = list
+                .iter()
+                .map(|x| m(x).map(|b| *b))
+                .collect::<Result<_>>()?;
             A::InList {
                 expr,
                 list,
@@ -1190,7 +1255,10 @@ fn map_ast(
             star,
         } => A::Function {
             name: name.clone(),
-            args: args.iter().map(|x| m(x).map(|b| *b)).collect::<Result<_>>()?,
+            args: args
+                .iter()
+                .map(|x| m(x).map(|b| *b))
+                .collect::<Result<_>>()?,
             distinct: *distinct,
             star: *star,
         },
@@ -1232,7 +1300,10 @@ fn replace_group_exprs(e: Expr, group: &[(Expr, ColumnDef)]) -> Expr {
             negated,
         } => Expr::InList {
             expr: Box::new(replace_group_exprs(*expr, group)),
-            list: list.into_iter().map(|x| replace_group_exprs(x, group)).collect(),
+            list: list
+                .into_iter()
+                .map(|x| replace_group_exprs(x, group))
+                .collect(),
             negated,
         },
         Expr::Case {
@@ -1253,7 +1324,10 @@ fn replace_group_exprs(e: Expr, group: &[(Expr, ColumnDef)]) -> Expr {
             data_type,
         } => Expr::Function {
             func,
-            args: args.into_iter().map(|x| replace_group_exprs(x, group)).collect(),
+            args: args
+                .into_iter()
+                .map(|x| replace_group_exprs(x, group))
+                .collect(),
             data_type,
         },
     }
@@ -1285,14 +1359,21 @@ fn merge_scopes(mut left: Scope, right: Scope) -> Result<Scope> {
     let lq: Vec<String> = left.qualifiers().into_iter().map(String::from).collect();
     for q in right.qualifiers() {
         if lq.iter().any(|x| x == q) {
-            return bind_err(format!("table name '{q}' specified more than once (use an alias)"));
+            return bind_err(format!(
+                "table name '{q}' specified more than once (use an alias)"
+            ));
         }
     }
     left.extend(right);
     Ok(left)
 }
 
-fn derived_scope(plan: &LogicalPlan, qualifier: &str, names: &[String], what: &str) -> Result<Scope> {
+fn derived_scope(
+    plan: &LogicalPlan,
+    qualifier: &str,
+    names: &[String],
+    what: &str,
+) -> Result<Scope> {
     let schema = plan.schema();
     if names.len() != schema.len() {
         return bind_err(format!(
@@ -1380,7 +1461,9 @@ fn cast_to(e: Expr, to: DataType) -> Result<Expr> {
     if let Expr::Literal(v) = &e {
         let converted = match (v, to) {
             (v, t) if v.is_null() => Some(ScalarValue::null_of(t)),
-            (ScalarValue::Int64(Some(i)), DataType::Float64) => Some(ScalarValue::Float64(Some(*i as f64))),
+            (ScalarValue::Int64(Some(i)), DataType::Float64) => {
+                Some(ScalarValue::Float64(Some(*i as f64)))
+            }
             (ScalarValue::Utf8(Some(s)), DataType::Date32) => match parse_date(s) {
                 Some(d) => Some(ScalarValue::Date32(Some(d))),
                 None => return type_err(format!("cannot interpret '{s}' as a DATE")),
@@ -1399,7 +1482,9 @@ fn cast_to(e: Expr, to: DataType) -> Result<Expr> {
 
 fn explicit_cast(e: Expr, to: DataType) -> Result<Expr> {
     let from = e.data_type();
-    if from == DataType::Boolean && to == DataType::Date32 || from == DataType::Date32 && to.is_numeric() {
+    if from == DataType::Boolean && to == DataType::Date32
+        || from == DataType::Date32 && to.is_numeric()
+    {
         return type_err(format!("cannot cast {from} to {to}"));
     }
     cast_to(e, to)
@@ -1409,7 +1494,11 @@ fn comparison(l: Expr, op: BinaryOp, r: Expr) -> Result<Expr> {
     let (lt, rt) = (l.data_type(), r.data_type());
     let t = common_type(lt, rt)
         .ok_or_else(|| QuarryError::Type(format!("cannot compare {lt} with {rt}")))?;
-    let t = if t == DataType::Null { DataType::Int64 } else { t };
+    let t = if t == DataType::Null {
+        DataType::Int64
+    } else {
+        t
+    };
     Ok(Expr::binary(cast_to(l, t)?, op, cast_to(r, t)?))
 }
 
@@ -1431,18 +1520,28 @@ fn expect_type(e: Expr, t: DataType, ctx: &str) -> Result<Expr> {
 mod tests {
     use super::*;
     use crate::catalog::{StatsCollector, TableEntry, TableSource};
-    use crate::sql::{parse_statement, ast::Statement};
+    use crate::sql::{ast::Statement, parse_statement};
     use arrow::datatypes::{DataType as ArrowType, Field, Schema};
     use std::sync::Arc;
 
     fn catalog() -> Catalog {
         let mut c = Catalog::new();
         for (name, cols) in [
-            ("t", vec![("a", ArrowType::Int64), ("b", ArrowType::Float64), ("s", ArrowType::Utf8), ("d", ArrowType::Date32)]),
+            (
+                "t",
+                vec![
+                    ("a", ArrowType::Int64),
+                    ("b", ArrowType::Float64),
+                    ("s", ArrowType::Utf8),
+                    ("d", ArrowType::Date32),
+                ],
+            ),
             ("u", vec![("a", ArrowType::Int64), ("c", ArrowType::Utf8)]),
         ] {
             let schema = Arc::new(Schema::new(
-                cols.into_iter().map(|(n, t)| Field::new(n, t, true)).collect::<Vec<_>>(),
+                cols.into_iter()
+                    .map(|(n, t)| Field::new(n, t, true))
+                    .collect::<Vec<_>>(),
             ));
             c.insert(TableEntry {
                 name: name.into(),
@@ -1493,22 +1592,31 @@ mod tests {
     #[test]
     fn aggregates_and_grouping() {
         let p = plan("SELECT s, sum(a) AS total, count(*) FROM t GROUP BY s HAVING sum(a) > 1 ORDER BY count(*)");
-        assert!(p.contains("Aggregate: group=[s] aggs=[sum(a) AS sum(a), count(*) AS count(*)]"), "{p}");
+        assert!(
+            p.contains("Aggregate: group=[s] aggs=[sum(a) AS sum(a), count(*) AS count(*)]"),
+            "{p}"
+        );
         assert!(p.contains("Filter: sum(a) > 1"), "{p}");
         assert!(p.contains("Sort: count(*) ASC"), "{p}");
         // GROUP BY ordinal and alias.
         assert!(plan("SELECT s AS k, count(*) FROM t GROUP BY 1").contains("group=[s]"));
-        assert!(plan("SELECT upper(s) AS k, count(*) FROM t GROUP BY k").contains("group=[upper(s)]"));
+        assert!(
+            plan("SELECT upper(s) AS k, count(*) FROM t GROUP BY k").contains("group=[upper(s)]")
+        );
         // Expressions over group keys are allowed.
         assert!(bind("SELECT s || 'x', count(*) FROM t GROUP BY s").is_ok());
         // Global aggregate.
-        assert!(plan("SELECT count(*), avg(a) FROM t").contains("group=[] aggs=[count(*) AS count(*), avg(CAST(a AS DOUBLE))"));
+        assert!(plan("SELECT count(*), avg(a) FROM t")
+            .contains("group=[] aggs=[count(*) AS count(*), avg(CAST(a AS DOUBLE))"));
     }
 
     #[test]
     fn hidden_order_by_columns_are_projected_away() {
         let p = plan("SELECT a FROM t ORDER BY b");
-        assert!(p.starts_with("Projection: a\n  Sort: __order0 ASC\n    Projection: a, b AS __order0"), "{p}");
+        assert!(
+            p.starts_with("Projection: a\n  Sort: __order0 ASC\n    Projection: a, b AS __order0"),
+            "{p}"
+        );
     }
 
     #[test]

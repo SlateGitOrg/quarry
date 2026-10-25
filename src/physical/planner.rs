@@ -37,7 +37,10 @@ pub fn create_physical_plan(plan: &LogicalPlan, config: &ExecConfig) -> Result<E
         LogicalPlan::Filter { input, predicate } => {
             let child = create_physical_plan(input, config)?;
             let pred = create_physical_expr(predicate, &input.schema())?;
-            ExecNode::new(Box::new(FilterExec::new(child, pred, predicate.to_string())), schema)
+            ExecNode::new(
+                Box::new(FilterExec::new(child, pred, predicate.to_string())),
+                schema,
+            )
         }
         LogicalPlan::Project { input, exprs } => {
             let child = create_physical_plan(input, config)?;
@@ -57,7 +60,10 @@ pub fn create_physical_plan(plan: &LogicalPlan, config: &ExecConfig) -> Result<E
                     }
                 })
                 .collect();
-            ExecNode::new(Box::new(ProjectExec::new(child, phys, schema.clone(), text)), schema)
+            ExecNode::new(
+                Box::new(ProjectExec::new(child, phys, schema.clone(), text)),
+                schema,
+            )
         }
         LogicalPlan::Join {
             left,
@@ -136,7 +142,10 @@ pub fn create_physical_plan(plan: &LogicalPlan, config: &ExecConfig) -> Result<E
                 .iter()
                 .map(|(e, _)| create_physical_expr(e, &in_schema))
                 .collect::<Result<Vec<_>>>()?;
-            let group_types = group_by.iter().map(|(e, _)| e.data_type().to_arrow()).collect();
+            let group_types = group_by
+                .iter()
+                .map(|(e, _)| e.data_type().to_arrow())
+                .collect();
             let mut phys_aggs = Vec::new();
             for a in aggs {
                 let arg = match &a.arg {

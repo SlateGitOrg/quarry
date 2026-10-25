@@ -51,7 +51,11 @@ fn subset(e: &Expr, ids: &HashSet<ColId>) -> bool {
 
 /// `Some((l, r))` when `e` is `l = r` with `l` over `left` and `r` over `right`
 /// (either orientation), both sides referencing at least one column.
-pub(crate) fn as_equi_key(e: &Expr, left: &HashSet<ColId>, right: &HashSet<ColId>) -> Option<(Expr, Expr)> {
+pub(crate) fn as_equi_key(
+    e: &Expr,
+    left: &HashSet<ColId>,
+    right: &HashSet<ColId>,
+) -> Option<(Expr, Expr)> {
     let Expr::Binary {
         left: a,
         op: BinaryOp::Eq,

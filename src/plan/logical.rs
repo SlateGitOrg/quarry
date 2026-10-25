@@ -165,9 +165,7 @@ impl LogicalPlan {
                 cols.extend(r);
                 cols
             }
-            LogicalPlan::Aggregate {
-                group_by, aggs, ..
-            } => group_by
+            LogicalPlan::Aggregate { group_by, aggs, .. } => group_by
                 .iter()
                 .map(|(_, c)| c.clone())
                 .chain(aggs.iter().map(|a| a.output.clone()))
@@ -297,8 +295,19 @@ impl LogicalPlan {
         out
     }
 
-    fn write_tree(&self, out: &mut String, depth: usize, annotate: &dyn Fn(&LogicalPlan) -> String) {
-        let _ = writeln!(out, "{}{}{}", "  ".repeat(depth), self.describe(), annotate(self));
+    fn write_tree(
+        &self,
+        out: &mut String,
+        depth: usize,
+        annotate: &dyn Fn(&LogicalPlan) -> String,
+    ) {
+        let _ = writeln!(
+            out,
+            "{}{}{}",
+            "  ".repeat(depth),
+            self.describe(),
+            annotate(self)
+        );
         for c in self.children() {
             c.write_tree(out, depth + 1, annotate);
         }
@@ -329,7 +338,10 @@ impl std::fmt::Display for LogicalPlan {
 
 impl LogicalPlan {
     /// Rebuild this node with each direct child transformed by `f`.
-    pub fn map_children(self, f: &mut dyn FnMut(LogicalPlan) -> Result<LogicalPlan>) -> Result<LogicalPlan> {
+    pub fn map_children(
+        self,
+        f: &mut dyn FnMut(LogicalPlan) -> Result<LogicalPlan>,
+    ) -> Result<LogicalPlan> {
         let mut b = |p: Box<LogicalPlan>| f(*p).map(Box::new);
         Ok(match self {
             LogicalPlan::Scan(_) | LogicalPlan::Empty { .. } => self,
@@ -446,7 +458,10 @@ impl LogicalPlan {
     }
 
     /// Apply `f` to every node bottom-up.
-    pub fn transform_up(self, f: &mut dyn FnMut(LogicalPlan) -> Result<LogicalPlan>) -> Result<LogicalPlan> {
+    pub fn transform_up(
+        self,
+        f: &mut dyn FnMut(LogicalPlan) -> Result<LogicalPlan>,
+    ) -> Result<LogicalPlan> {
         let rebuilt = self.map_children(&mut |c| c.transform_up(f))?;
         f(rebuilt)
     }
@@ -490,7 +505,10 @@ pub fn simplify_display_names(plan: LogicalPlan) -> Result<LogicalPlan> {
         let mut stack = vec![e];
         while let Some(x) = stack.pop() {
             if let Expr::Column(c) = x {
-                by_name.entry(bare(&c.name).to_string()).or_default().insert(c.id);
+                by_name
+                    .entry(bare(&c.name).to_string())
+                    .or_default()
+                    .insert(c.id);
             }
             stack.extend(x.children());
         }

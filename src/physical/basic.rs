@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use arrow::array::{ArrayRef, AsArray, RecordBatch};
+use arrow::compute::SortOptions;
 use arrow::compute::{concat_batches, filter_record_batch, lexsort_to_indices, take, SortColumn};
 use arrow::datatypes::SchemaRef;
-use arrow::compute::SortOptions;
 
 use super::expr::{null_as_false, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
@@ -31,12 +31,15 @@ impl FilterExec {
 /// Apply a boolean predicate to a batch.
 pub fn filter_batch(batch: &RecordBatch, predicate: &PhysicalExpr) -> Result<RecordBatch> {
     let mask = predicate.evaluate(batch)?.into_array(batch.num_rows());
-    Ok(filter_record_batch(batch, &null_as_false(mask.as_boolean()))?)
+    Ok(filter_record_batch(
+        batch,
+        &null_as_false(mask.as_boolean()),
+    )?)
 }
 
 impl Operator for FilterExec {
     fn next_batch(&mut self) -> Result<Option<RecordBatch>> {
-        match self.input.next()? {
+        match self.input.pull()? {
             None => Ok(None),
             Some(b) => Ok(Some(filter_batch(&b, &self.predicate)?)),
         }
@@ -60,7 +63,12 @@ pub struct ProjectExec {
 }
 
 impl ProjectExec {
-    pub fn new(input: ExecNode, exprs: Vec<PhysicalExpr>, schema: SchemaRef, text: Vec<String>) -> Self {
+    pub fn new(
+        input: ExecNode,
+        exprs: Vec<PhysicalExpr>,
+        schema: SchemaRef,
+        text: Vec<String>,
+    ) -> Self {
         ProjectExec {
             input: Box::new(input),
             exprs,
@@ -72,7 +80,7 @@ impl ProjectExec {
 
 impl Operator for ProjectExec {
     fn next_batch(&mut self) -> Result<Option<RecordBatch>> {
-        let Some(b) = self.input.next()? else {
+        let Some(b) = self.input.pull()? else {
             return Ok(None);
         };
         let n = b.num_rows();
@@ -211,7 +219,7 @@ impl Operator for LimitExec {
             if self.fetch.is_some_and(|f| self.emitted >= f) {
                 return Ok(None);
             }
-            let Some(b) = self.input.next()? else {
+            let Some(b) = self.input.pull()? else {
                 return Ok(None);
             };
             let n = b.num_rows();

@@ -87,7 +87,7 @@ impl ExecNode {
     }
 
     /// Pull the next non-empty batch.
-    pub fn next(&mut self) -> Result<Option<RecordBatch>> {
+    pub fn pull(&mut self) -> Result<Option<RecordBatch>> {
         let start = Instant::now();
         let result = loop {
             match self.op.next_batch() {
@@ -106,7 +106,7 @@ impl ExecNode {
     /// Drain the node into a vector of batches.
     pub fn collect(&mut self) -> Result<Vec<RecordBatch>> {
         let mut out = Vec::new();
-        while let Some(b) = self.next()? {
+        while let Some(b) = self.pull()? {
             out.push(b);
         }
         Ok(out)
@@ -159,7 +159,11 @@ pub fn arrow_schema(cols: &[ColumnDef]) -> SchemaRef {
 }
 
 /// Build a batch, allowing zero columns (the row count is then explicit).
-pub fn make_batch(schema: &SchemaRef, columns: Vec<arrow::array::ArrayRef>, rows: usize) -> Result<RecordBatch> {
+pub fn make_batch(
+    schema: &SchemaRef,
+    columns: Vec<arrow::array::ArrayRef>,
+    rows: usize,
+) -> Result<RecordBatch> {
     Ok(RecordBatch::try_new_with_options(
         Arc::clone(schema),
         columns,

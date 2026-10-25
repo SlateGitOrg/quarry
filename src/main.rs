@@ -9,7 +9,11 @@ use quarry::tpch::{generate, write_tables, FileFormat};
 use quarry::{CsvOptions, Engine, Result};
 
 #[derive(Parser)]
-#[command(name = "quarry", version, about = "A vectorized SQL query engine over Apache Arrow")]
+#[command(
+    name = "quarry",
+    version,
+    about = "A vectorized SQL query engine over Apache Arrow"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -77,7 +81,12 @@ fn run(cli: Cli) -> Result<()> {
             for t in &tables {
                 println!("{:<10} {:>9} rows", t.name, t.batch.num_rows());
             }
-            println!("wrote {} tables to {} in {:.2?}", tables.len(), out.display(), start.elapsed());
+            println!(
+                "wrote {} tables to {} in {:.2?}",
+                tables.len(),
+                out.display(),
+                start.elapsed()
+            );
             Ok(())
         }
         Command::Query {

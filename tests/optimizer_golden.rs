@@ -37,7 +37,11 @@ fn check_golden(name: &str, sql: &str, verbose: bool) {
 fn tpch(n: u32) {
     let path = format!("{}/queries/tpch/q{n:02}.sql", env!("CARGO_MANIFEST_DIR"));
     let sql = std::fs::read_to_string(path).unwrap();
-    let body: String = sql.lines().filter(|l| !l.starts_with("--")).collect::<Vec<_>>().join("\n");
+    let body: String = sql
+        .lines()
+        .filter(|l| !l.starts_with("--"))
+        .collect::<Vec<_>>()
+        .join("\n");
     check_golden(&format!("tpch_q{n:02}"), &body, false);
 }
 
@@ -65,7 +69,11 @@ fn rule_constant_folding() {
 
 #[test]
 fn rule_contradiction_becomes_empty() {
-    check_golden("rule_contradiction", "SELECT count(*) FROM orders WHERE 1 = 0", false);
+    check_golden(
+        "rule_contradiction",
+        "SELECT count(*) FROM orders WHERE 1 = 0",
+        false,
+    );
 }
 
 #[test]
@@ -108,8 +116,16 @@ fn rule_top_k() {
 fn rule_join_reorder_trace() {
     // EXPLAIN VERBOSE shows the plan after every rule, from the binder's
     // left-deep cross products to the reordered hash joins.
-    let sql = std::fs::read_to_string(format!("{}/queries/tpch/q05.sql", env!("CARGO_MANIFEST_DIR"))).unwrap();
-    let body: String = sql.lines().filter(|l| !l.starts_with("--")).collect::<Vec<_>>().join("\n");
+    let sql = std::fs::read_to_string(format!(
+        "{}/queries/tpch/q05.sql",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap();
+    let body: String = sql
+        .lines()
+        .filter(|l| !l.starts_with("--"))
+        .collect::<Vec<_>>()
+        .join("\n");
     check_golden("verbose_q05", &body, true);
 }
 

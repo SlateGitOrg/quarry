@@ -56,7 +56,9 @@ fn is_inner_join(p: &LogicalPlan) -> bool {
 /// Number of leaves in the inner-join cluster rooted at `p`.
 fn cluster_size(p: &LogicalPlan) -> usize {
     match p {
-        LogicalPlan::Join { left, right, .. } if is_inner_join(p) => cluster_size(left) + cluster_size(right),
+        LogicalPlan::Join { left, right, .. } if is_inner_join(p) => {
+            cluster_size(left) + cluster_size(right)
+        }
         _ => 1,
     }
 }
@@ -69,7 +71,10 @@ fn reorder(plan: LogicalPlan) -> Result<LogicalPlan> {
     let mut leaves = Vec::new();
     let mut preds = Vec::new();
     flatten(plan, &mut leaves, &mut preds);
-    let leaves = leaves.into_iter().map(reorder).collect::<Result<Vec<_>>>()?;
+    let leaves = leaves
+        .into_iter()
+        .map(reorder)
+        .collect::<Result<Vec<_>>>()?;
     Ok(solve(leaves, preds))
 }
 
@@ -227,7 +232,10 @@ fn dp(problem: &Problem, n: usize) -> Tree {
                             let cost = a.cost + b.cost + rows;
                             if candidate.as_ref().is_none_or(|c| cost < c.cost) {
                                 candidate = Some(Best {
-                                    tree: Tree::Join(Box::new(a.tree.clone()), Box::new(b.tree.clone())),
+                                    tree: Tree::Join(
+                                        Box::new(a.tree.clone()),
+                                        Box::new(b.tree.clone()),
+                                    ),
                                     cost,
                                 });
                             }
@@ -270,7 +278,10 @@ fn greedy(problem: &Problem, n: usize) -> Tree {
         let (ma, ta) = parts.remove(i);
         parts.push((ma | mb, Tree::Join(Box::new(ta), Box::new(tb))));
     }
-    parts.pop().map(|(_, t)| t).unwrap_or_else(|| unreachable!("non-empty"))
+    parts
+        .pop()
+        .map(|(_, t)| t)
+        .unwrap_or_else(|| unreachable!("non-empty"))
 }
 
 /// Materialize a join tree, attaching each predicate at the lowest join that
@@ -284,7 +295,9 @@ fn build(
 ) -> (LogicalPlan, Mask) {
     match tree {
         Tree::Leaf(i) => (
-            slots[*i].take().unwrap_or_else(|| unreachable!("each leaf used once")),
+            slots[*i]
+                .take()
+                .unwrap_or_else(|| unreachable!("each leaf used once")),
             1 << i,
         ),
         Tree::Join(a, b) => {
@@ -306,9 +319,9 @@ fn build(
             let mut on = Vec::new();
             let mut filters = Vec::new();
             for slot in preds.iter_mut() {
-                let covered = slot
-                    .as_ref()
-                    .is_some_and(|p| p.mask & (lm | rm) == p.mask && p.mask & lm != 0 && p.mask & rm != 0);
+                let covered = slot.as_ref().is_some_and(|p| {
+                    p.mask & (lm | rm) == p.mask && p.mask & lm != 0 && p.mask & rm != 0
+                });
                 if !covered {
                     continue;
                 }

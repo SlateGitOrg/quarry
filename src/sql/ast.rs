@@ -110,7 +110,10 @@ pub enum Literal {
     /// `DATE 'YYYY-MM-DD'`
     Date(String),
     /// `INTERVAL 'n' unit`
-    Interval { value: i64, unit: IntervalUnit },
+    Interval {
+        value: i64,
+        unit: IntervalUnit,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,14 +158,23 @@ impl BinaryOp {
     pub fn is_comparison(self) -> bool {
         matches!(
             self,
-            BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::Lt | BinaryOp::LtEq | BinaryOp::Gt | BinaryOp::GtEq
+            BinaryOp::Eq
+                | BinaryOp::NotEq
+                | BinaryOp::Lt
+                | BinaryOp::LtEq
+                | BinaryOp::Gt
+                | BinaryOp::GtEq
         )
     }
 
     pub fn is_arithmetic(self) -> bool {
         matches!(
             self,
-            BinaryOp::Plus | BinaryOp::Minus | BinaryOp::Multiply | BinaryOp::Divide | BinaryOp::Modulo
+            BinaryOp::Plus
+                | BinaryOp::Minus
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Modulo
         )
     }
 
@@ -282,8 +294,13 @@ impl Expr {
                 BinaryOp::Plus | BinaryOp::Minus => 6,
                 _ => 7,
             },
-            Expr::Unary { op: UnaryOp::Not, .. } => 3,
-            Expr::IsNull { .. } | Expr::Between { .. } | Expr::InList { .. } | Expr::Like { .. } => 4,
+            Expr::Unary {
+                op: UnaryOp::Not, ..
+            } => 3,
+            Expr::IsNull { .. }
+            | Expr::Between { .. }
+            | Expr::InList { .. }
+            | Expr::Like { .. } => 4,
             _ => 10,
         }
     }
@@ -319,11 +336,17 @@ impl fmt::Display for Expr {
                     write!(f, "INTERVAL '{value}' {u}")
                 }
             },
-            Expr::Unary { op: UnaryOp::Neg, expr } => {
+            Expr::Unary {
+                op: UnaryOp::Neg,
+                expr,
+            } => {
                 f.write_str("-")?;
                 child(f, expr, 10, false)
             }
-            Expr::Unary { op: UnaryOp::Not, expr } => {
+            Expr::Unary {
+                op: UnaryOp::Not,
+                expr,
+            } => {
                 f.write_str("NOT ")?;
                 child(f, expr, 4, false)
             }
@@ -356,7 +379,12 @@ impl fmt::Display for Expr {
             } => {
                 child(f, expr, 5, false)?;
                 let items: Vec<String> = list.iter().map(|e| e.to_string()).collect();
-                write!(f, " {}IN ({})", if *negated { "NOT " } else { "" }, items.join(", "))
+                write!(
+                    f,
+                    " {}IN ({})",
+                    if *negated { "NOT " } else { "" },
+                    items.join(", ")
+                )
             }
             Expr::Like {
                 expr,

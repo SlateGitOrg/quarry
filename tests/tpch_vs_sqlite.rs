@@ -9,7 +9,10 @@ fn run(n: u32) {
     let path = format!("{}/queries/tpch/q{n:02}.sql", env!("CARGO_MANIFEST_DIR"));
     let sql = std::fs::read_to_string(&path).expect("query file");
     let rows = check(tpch_fixture(), &format!("q{n:02}"), &sql, true);
-    assert!(rows > 0, "q{n:02} returned no rows; the test would be vacuous");
+    assert!(
+        rows > 0,
+        "q{n:02} returned no rows; the test would be vacuous"
+    );
 }
 
 macro_rules! tpch_tests {

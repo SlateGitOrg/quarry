@@ -10,7 +10,9 @@ use quarry::Engine;
 
 use super::{load_sqlite, new_sqlite, Fixture};
 
-const WORDS: &[&str] = &["apple", "banana", "cherry", "", "date", "Elder", "fig", "grape", "ab", "b_c"];
+const WORDS: &[&str] = &[
+    "apple", "banana", "cherry", "", "date", "Elder", "fig", "grape", "ab", "b_c",
+];
 
 fn maybe<T>(rng: &mut Rng, pct_null: i64, v: T) -> Option<T> {
     (rng.range(0, 99) >= pct_null).then_some(v)
@@ -20,7 +22,8 @@ pub fn tables() -> Vec<(&'static str, SchemaRef, RecordBatch)> {
     let mut rng = Rng::new(42);
     let n = 300;
     let base = parse_date("1995-01-01").unwrap();
-    let (mut a, mut b, mut f, mut s, mut d, mut g) = (vec![], vec![], vec![], vec![], vec![], vec![]);
+    let (mut a, mut b, mut f, mut s, mut d, mut g) =
+        (vec![], vec![], vec![], vec![], vec![], vec![]);
     for _ in 0..n {
         let av = rng.range(-20, 100);
         a.push(maybe(&mut rng, 15, av));
@@ -78,7 +81,11 @@ pub fn tables() -> Vec<(&'static str, SchemaRef, RecordBatch)> {
     )
     .unwrap();
     let e = RecordBatch::new_empty(u_schema.clone());
-    vec![("t", t_schema, t), ("u", u_schema.clone(), u), ("e", u_schema, e)]
+    vec![
+        ("t", t_schema, t),
+        ("u", u_schema.clone(), u),
+        ("e", u_schema, e),
+    ]
 }
 
 pub fn fixture() -> &'static Fixture {
@@ -89,7 +96,9 @@ pub fn fixture() -> &'static Fixture {
         engine.set_batch_size(64);
         let conn = new_sqlite();
         for (name, schema, batch) in tables() {
-            engine.register_batches(name, schema.clone(), vec![batch.clone()]).unwrap();
+            engine
+                .register_batches(name, schema.clone(), vec![batch.clone()])
+                .unwrap();
             load_sqlite(&conn, name, &schema, &[batch]);
         }
         Fixture {
@@ -98,4 +107,3 @@ pub fn fixture() -> &'static Fixture {
         }
     })
 }
-

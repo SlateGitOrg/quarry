@@ -82,7 +82,10 @@ impl Optimizer {
     }
 
     /// Optimize and record the plan after every rule (for EXPLAIN VERBOSE).
-    pub fn optimize_traced(&self, plan: LogicalPlan) -> Result<(LogicalPlan, Vec<(&'static str, LogicalPlan)>)> {
+    pub fn optimize_traced(
+        &self,
+        plan: LogicalPlan,
+    ) -> Result<(LogicalPlan, Vec<(&'static str, LogicalPlan)>)> {
         let mut trace = Vec::new();
         let mut p = plan;
         for r in &self.rules {

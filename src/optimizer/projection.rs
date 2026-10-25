@@ -41,7 +41,9 @@ fn merge_projections(plan: LogicalPlan) -> LogicalPlan {
             let merged = exprs
                 .into_iter()
                 .map(|(e, def)| {
-                    let Expr::Column(c) = &e else { unreachable!("checked above") };
+                    let Expr::Column(c) = &e else {
+                        unreachable!("checked above")
+                    };
                     let source = inner
                         .iter()
                         .find(|(_, d)| d.id == c.id)
@@ -60,7 +62,9 @@ fn merge_projections(plan: LogicalPlan) -> LogicalPlan {
             let identity = all_columns
                 && exprs.len() == schema.len()
                 && exprs.iter().zip(&schema).all(|((e, def), c)| {
-                    matches!(e, Expr::Column(r) if r.id == c.id) && def.id == c.id && def.name == c.name
+                    matches!(e, Expr::Column(r) if r.id == c.id)
+                        && def.id == c.id
+                        && def.name == c.name
                 });
             if identity {
                 other
@@ -83,7 +87,10 @@ fn refs<'a>(exprs: impl IntoIterator<Item = &'a Expr>, out: &mut HashSet<ColId>)
 fn prune(plan: LogicalPlan, required: &HashSet<ColId>) -> Result<LogicalPlan> {
     match plan {
         LogicalPlan::Project { input, exprs } => {
-            let kept: Vec<_> = exprs.into_iter().filter(|(_, c)| required.contains(&c.id)).collect();
+            let kept: Vec<_> = exprs
+                .into_iter()
+                .filter(|(_, c)| required.contains(&c.id))
+                .collect();
             let mut need = HashSet::new();
             refs(kept.iter().map(|(e, _)| e), &mut need);
             Ok(LogicalPlan::Project {
@@ -118,7 +125,10 @@ fn prune(plan: LogicalPlan, required: &HashSet<ColId>) -> Result<LogicalPlan> {
             group_by,
             aggs,
         } => {
-            let aggs: Vec<_> = aggs.into_iter().filter(|a| required.contains(&a.output.id)).collect();
+            let aggs: Vec<_> = aggs
+                .into_iter()
+                .filter(|a| required.contains(&a.output.id))
+                .collect();
             let mut need = HashSet::new();
             refs(group_by.iter().map(|(e, _)| e), &mut need);
             refs(aggs.iter().filter_map(|a| a.arg.as_ref()), &mut need);
@@ -169,7 +179,9 @@ fn prune(plan: LogicalPlan, required: &HashSet<ColId>) -> Result<LogicalPlan> {
         LogicalPlan::Scan(mut s) => {
             let mut need = required.clone();
             refs(&s.filters, &mut need);
-            let mut keep: Vec<usize> = (0..s.columns.len()).filter(|&i| need.contains(&s.columns[i].id)).collect();
+            let mut keep: Vec<usize> = (0..s.columns.len())
+                .filter(|&i| need.contains(&s.columns[i].id))
+                .collect();
             if keep.is_empty() && !s.columns.is_empty() {
                 // Keep one column so the scan still reports row counts (count(*)).
                 keep.push(0);

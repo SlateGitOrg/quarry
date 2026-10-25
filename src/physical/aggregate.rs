@@ -13,8 +13,8 @@
 use std::sync::Arc;
 
 use arrow::array::{
-    Array, ArrayRef, ArrowPrimitiveType, AsArray, BooleanArray, Float64Array, Int64Array, PrimitiveArray,
-    RecordBatch, StringArray,
+    Array, ArrayRef, ArrowPrimitiveType, AsArray, BooleanArray, Float64Array, Int64Array,
+    PrimitiveArray, RecordBatch, StringArray,
 };
 use arrow::datatypes::{DataType as ArrowType, Date32Type, Float64Type, Int64Type, SchemaRef};
 use arrow::row::{RowConverter, Rows, SortField};
@@ -28,7 +28,12 @@ use crate::plan::expr::AggFunc;
 /// Vectorized aggregate state for all groups.
 pub trait Accumulator {
     /// Fold `values` (absent for `count(*)`) into the groups named by `groups`.
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()>;
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()>;
     /// Produce one output value per group.
     fn finish(&mut self, num_groups: usize) -> Result<ArrayRef>;
 }
@@ -38,7 +43,12 @@ struct CountAcc {
 }
 
 impl Accumulator for CountAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.counts.resize(num_groups, 0);
         match values {
             None => groups.iter().for_each(|g| self.counts[*g as usize] += 1),
@@ -65,7 +75,12 @@ struct SumIntAcc {
 }
 
 impl Accumulator for SumIntAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.sums.resize(num_groups, 0);
         self.seen.resize(num_groups, false);
         let Some(v) = values else { return Ok(()) };
@@ -104,7 +119,12 @@ struct SumFloatAcc {
 }
 
 impl Accumulator for SumFloatAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.sums.resize(num_groups, 0.0);
         self.counts.resize(num_groups, 0);
         let Some(v) = values else { return Ok(()) };
@@ -144,7 +164,12 @@ impl<T: ArrowPrimitiveType> Accumulator for MinMaxPrimAcc<T>
 where
     T::Native: PartialOrd,
 {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.vals.resize(num_groups, None);
         let Some(v) = values else { return Ok(()) };
         let v = v.as_primitive::<T>();
@@ -183,7 +208,12 @@ struct MinMaxStrAcc {
 }
 
 impl Accumulator for MinMaxStrAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.vals.resize(num_groups, None);
         let Some(v) = values else { return Ok(()) };
         let v = v.as_string::<i32>();
@@ -193,7 +223,9 @@ impl Accumulator for MinMaxStrAcc {
                 let slot = &mut self.vals[*g as usize];
                 let better = match slot {
                     None => true,
-                    Some(cur) => (self.is_min && x < cur.as_str()) || (!self.is_min && x > cur.as_str()),
+                    Some(cur) => {
+                        (self.is_min && x < cur.as_str()) || (!self.is_min && x > cur.as_str())
+                    }
                 };
                 if better {
                     *slot = Some(x.to_string());
@@ -215,7 +247,12 @@ struct MinMaxBoolAcc {
 }
 
 impl Accumulator for MinMaxBoolAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        num_groups: usize,
+    ) -> Result<()> {
         self.vals.resize(num_groups, None);
         let Some(v) = values else { return Ok(()) };
         let v = v.as_boolean();
@@ -249,7 +286,12 @@ struct DistinctAcc {
 }
 
 impl Accumulator for DistinctAcc {
-    fn update(&mut self, values: Option<&ArrayRef>, groups: &[u32], _num_groups: usize) -> Result<()> {
+    fn update(
+        &mut self,
+        values: Option<&ArrayRef>,
+        groups: &[u32],
+        _num_groups: usize,
+    ) -> Result<()> {
         let Some(v) = values else { return Ok(()) };
         let rows = self.converter.convert_columns(std::slice::from_ref(v))?;
         for (i, g) in groups.iter().enumerate() {
@@ -269,26 +311,47 @@ impl Accumulator for DistinctAcc {
 }
 
 /// Build the accumulator for `func` over values of `input_type`.
-pub fn create_accumulator(func: AggFunc, input_type: Option<&ArrowType>, distinct: bool) -> Result<Box<dyn Accumulator>> {
+pub fn create_accumulator(
+    func: AggFunc,
+    input_type: Option<&ArrowType>,
+    distinct: bool,
+) -> Result<Box<dyn Accumulator>> {
     let base: Box<dyn Accumulator> = match (func, input_type) {
         (AggFunc::CountStar, _) | (AggFunc::Count, _) => Box::new(CountAcc { counts: vec![] }),
         (AggFunc::Sum, Some(ArrowType::Int64)) => Box::new(SumIntAcc {
             sums: vec![],
             seen: vec![],
         }),
-        (AggFunc::Sum, Some(ArrowType::Float64)) | (AggFunc::Avg, Some(ArrowType::Float64)) => Box::new(SumFloatAcc {
-            sums: vec![],
-            counts: vec![],
-            avg: func == AggFunc::Avg,
-        }),
+        (AggFunc::Sum, Some(ArrowType::Float64)) | (AggFunc::Avg, Some(ArrowType::Float64)) => {
+            Box::new(SumFloatAcc {
+                sums: vec![],
+                counts: vec![],
+                avg: func == AggFunc::Avg,
+            })
+        }
         (AggFunc::Min | AggFunc::Max, Some(t)) => {
             let is_min = func == AggFunc::Min;
             match t {
-                ArrowType::Int64 => Box::new(MinMaxPrimAcc::<Int64Type> { vals: vec![], is_min }),
-                ArrowType::Float64 => Box::new(MinMaxPrimAcc::<Float64Type> { vals: vec![], is_min }),
-                ArrowType::Date32 => Box::new(MinMaxPrimAcc::<Date32Type> { vals: vec![], is_min }),
-                ArrowType::Utf8 => Box::new(MinMaxStrAcc { vals: vec![], is_min }),
-                ArrowType::Boolean => Box::new(MinMaxBoolAcc { vals: vec![], is_min }),
+                ArrowType::Int64 => Box::new(MinMaxPrimAcc::<Int64Type> {
+                    vals: vec![],
+                    is_min,
+                }),
+                ArrowType::Float64 => Box::new(MinMaxPrimAcc::<Float64Type> {
+                    vals: vec![],
+                    is_min,
+                }),
+                ArrowType::Date32 => Box::new(MinMaxPrimAcc::<Date32Type> {
+                    vals: vec![],
+                    is_min,
+                }),
+                ArrowType::Utf8 => Box::new(MinMaxStrAcc {
+                    vals: vec![],
+                    is_min,
+                }),
+                ArrowType::Boolean => Box::new(MinMaxBoolAcc {
+                    vals: vec![],
+                    is_min,
+                }),
                 other => return exec_err(format!("{func}() is not supported for {other}")),
             }
         }
@@ -415,7 +478,7 @@ impl HashAggregateExec {
 
     fn aggregate_all(&mut self) -> Result<RecordBatch> {
         let mut table = GroupTable::new(self.group_types.clone())?;
-        while let Some(batch) = self.input.next()? {
+        while let Some(batch) = self.input.pull()? {
             let n = batch.num_rows();
             let keys = self
                 .group_exprs
@@ -490,11 +553,20 @@ mod tests {
             acc.finish(4).unwrap()
         };
         let sum = run(AggFunc::Sum, false);
-        assert_eq!(sum.as_primitive::<Int64Type>().iter().collect::<Vec<_>>(), vec![Some(1), Some(6), Some(-2), None]);
+        assert_eq!(
+            sum.as_primitive::<Int64Type>().iter().collect::<Vec<_>>(),
+            vec![Some(1), Some(6), Some(-2), None]
+        );
         let cnt = run(AggFunc::Count, true);
-        assert_eq!(cnt.as_primitive::<Int64Type>().values().to_vec(), vec![1, 1, 1, 0]);
+        assert_eq!(
+            cnt.as_primitive::<Int64Type>().values().to_vec(),
+            vec![1, 1, 1, 0]
+        );
         let min = run(AggFunc::Min, false);
-        assert_eq!(min.as_primitive::<Int64Type>().iter().collect::<Vec<_>>(), vec![Some(1), Some(3), Some(-2), None]);
+        assert_eq!(
+            min.as_primitive::<Int64Type>().iter().collect::<Vec<_>>(),
+            vec![Some(1), Some(3), Some(-2), None]
+        );
         let dsum = run(AggFunc::Sum, true);
         assert_eq!(dsum.as_primitive::<Int64Type>().value(1), 3);
     }
@@ -512,7 +584,10 @@ mod tests {
         let mut acc = create_accumulator(AggFunc::Max, Some(&ArrowType::Utf8), false).unwrap();
         acc.update(Some(&s), &[0, 0, 1], 2).unwrap();
         let out = acc.finish(2).unwrap();
-        assert_eq!(out.as_string::<i32>().iter().collect::<Vec<_>>(), vec![Some("b"), None]);
+        assert_eq!(
+            out.as_string::<i32>().iter().collect::<Vec<_>>(),
+            vec![Some("b"), None]
+        );
         let b: ArrayRef = Arc::new(BooleanArray::from(vec![true, false]));
         let mut acc = create_accumulator(AggFunc::Min, Some(&ArrowType::Boolean), false).unwrap();
         acc.update(Some(&b), &[0, 0], 1).unwrap();
