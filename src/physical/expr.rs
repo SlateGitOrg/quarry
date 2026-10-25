@@ -12,7 +12,7 @@ use arrow::array::{
     Array, ArrayRef, AsArray, BooleanArray, Date32Array, Float64Array, Int64Array, Scalar, StringArray,
 };
 use arrow::compute::kernels::{boolean, cmp, numeric, zip::zip};
-use arrow::compute::{cast, prep_null_mask_filter};
+use arrow::compute::cast;
 use arrow::datatypes::{Date32Type, Float64Type, Int64Type};
 use arrow::record_batch::RecordBatch;
 
@@ -75,6 +75,15 @@ pub enum PhysicalExpr {
         func: ScalarFunc,
         args: Vec<PhysicalExpr>,
     },
+}
+
+/// A selection mask where NULL counts as false (SQL WHERE semantics).
+pub fn null_as_false(mask: &BooleanArray) -> BooleanArray {
+    if mask.null_count() == 0 {
+        mask.clone()
+    } else {
+        arrow::compute::prep_null_mask_filter(mask)
+    }
 }
 
 /// Resolve column ids against the input schema.
@@ -275,7 +284,7 @@ impl PhysicalExpr {
                 };
                 for (cond, then) in branches.iter().rev() {
                     let c = cond.evaluate(batch)?.into_array(n);
-                    let mask = prep_null_mask_filter(c.as_boolean());
+                    let mask = null_as_false(c.as_boolean());
                     let t = then.evaluate(batch)?.into_array(n);
                     acc = zip(&mask, &t, &acc)?;
                 }

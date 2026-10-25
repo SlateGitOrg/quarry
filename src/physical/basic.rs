@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
-use arrow::array::{Array, ArrayRef, AsArray, RecordBatch};
-use arrow::compute::{concat_batches, filter_record_batch, lexsort_to_indices, prep_null_mask_filter, take, SortColumn};
+use arrow::array::{ArrayRef, AsArray, RecordBatch};
+use arrow::compute::{concat_batches, filter_record_batch, lexsort_to_indices, take, SortColumn};
 use arrow::datatypes::SchemaRef;
 use arrow::compute::SortOptions;
 
-use super::expr::PhysicalExpr;
+use super::expr::{null_as_false, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
 use crate::error::Result;
 
@@ -31,13 +31,7 @@ impl FilterExec {
 /// Apply a boolean predicate to a batch.
 pub fn filter_batch(batch: &RecordBatch, predicate: &PhysicalExpr) -> Result<RecordBatch> {
     let mask = predicate.evaluate(batch)?.into_array(batch.num_rows());
-    let mask = mask.as_boolean();
-    let mask = if mask.null_count() > 0 {
-        prep_null_mask_filter(mask)
-    } else {
-        mask.clone()
-    };
-    Ok(filter_record_batch(batch, &mask)?)
+    Ok(filter_record_batch(batch, &null_as_false(mask.as_boolean()))?)
 }
 
 impl Operator for FilterExec {

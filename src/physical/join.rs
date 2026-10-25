@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use arrow::array::{Array, ArrayRef, AsArray, RecordBatch, UInt32Array};
-use arrow::compute::{concat_batches, prep_null_mask_filter, take};
+use arrow::compute::{concat_batches, take};
 use arrow::datatypes::SchemaRef;
 use arrow::row::{RowConverter, Rows, SortField};
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasher;
 
-use super::expr::PhysicalExpr;
+use super::expr::{null_as_false, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
 use crate::error::Result;
 use crate::plan::logical::JoinType;
@@ -137,7 +137,7 @@ impl HashJoinExec {
         let mut matched_probe = probe_idx;
         if let Some(f) = &self.filter {
             let mask = f.evaluate(&candidates)?.into_array(candidates.num_rows());
-            let mask = prep_null_mask_filter(mask.as_boolean());
+            let mask = null_as_false(mask.as_boolean());
             matched_probe = matched_probe
                 .into_iter()
                 .zip(mask.values().iter())
@@ -292,7 +292,7 @@ impl NestedLoopJoinExec {
         let mut kept = li;
         if let Some(f) = &self.filter {
             let mask = f.evaluate(&out)?.into_array(out.num_rows());
-            let mask = prep_null_mask_filter(mask.as_boolean());
+            let mask = null_as_false(mask.as_boolean());
             kept = kept
                 .into_iter()
                 .zip(mask.values().iter())
