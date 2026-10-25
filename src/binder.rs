@@ -1331,31 +1331,8 @@ fn cross_join(left: LogicalPlan, right: LogicalPlan) -> LogicalPlan {
 fn default_name(e: &ast::Expr) -> String {
     match e {
         ast::Expr::Identifier(parts) => parts.last().cloned().unwrap_or_default(),
-        other => {
-            let s = other.to_string();
-            match s.strip_prefix('(').and_then(|x| x.strip_suffix(')')) {
-                Some(inner) if balanced(inner) => inner.to_string(),
-                _ => s,
-            }
-        }
+        other => other.to_string(),
     }
-}
-
-fn balanced(s: &str) -> bool {
-    let mut depth = 0i32;
-    for c in s.chars() {
-        match c {
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if depth < 0 {
-                    return false;
-                }
-            }
-            _ => {}
-        }
-    }
-    depth == 0
 }
 
 fn column_name_of(e: &Expr) -> String {

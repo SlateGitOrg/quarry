@@ -271,6 +271,33 @@ pub enum Expr {
     },
 }
 
+impl Expr {
+    fn precedence(&self) -> u8 {
+        match self {
+            Expr::Binary { op, .. } => match op {
+                BinaryOp::Or => 1,
+                BinaryOp::And => 2,
+                o if o.is_comparison() => 4,
+                BinaryOp::Concat => 5,
+                BinaryOp::Plus | BinaryOp::Minus => 6,
+                _ => 7,
+            },
+            Expr::Unary { op: UnaryOp::Not, .. } => 3,
+            Expr::IsNull { .. } | Expr::Between { .. } | Expr::InList { .. } | Expr::Like { .. } => 4,
+            _ => 10,
+        }
+    }
+}
+
+fn child(f: &mut fmt::Formatter<'_>, e: &Expr, parent: u8, strict: bool) -> fmt::Result {
+    let p = e.precedence();
+    if p < parent || (strict && p == parent) {
+        write!(f, "({e})")
+    } else {
+        write!(f, "{e}")
+    }
+}
+
 impl fmt::Display for Expr {
     /// Canonical SQL rendering, used to derive default output column names.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -292,40 +319,54 @@ impl fmt::Display for Expr {
                     write!(f, "INTERVAL '{value}' {u}")
                 }
             },
-            Expr::Unary { op: UnaryOp::Neg, expr } => write!(f, "(-{expr})"),
-            Expr::Unary { op: UnaryOp::Not, expr } => write!(f, "(NOT {expr})"),
-            Expr::Binary { left, op, right } => write!(f, "({left} {op} {right})"),
+            Expr::Unary { op: UnaryOp::Neg, expr } => {
+                f.write_str("-")?;
+                child(f, expr, 10, false)
+            }
+            Expr::Unary { op: UnaryOp::Not, expr } => {
+                f.write_str("NOT ")?;
+                child(f, expr, 4, false)
+            }
+            Expr::Binary { left, op, right } => {
+                let p = self.precedence();
+                child(f, left, p, false)?;
+                write!(f, " {op} ")?;
+                child(f, right, p, !matches!(op, BinaryOp::And | BinaryOp::Or))
+            }
             Expr::IsNull { expr, negated } => {
-                write!(f, "({expr} IS {}NULL)", if *negated { "NOT " } else { "" })
+                child(f, expr, 5, false)?;
+                write!(f, " IS {}NULL", if *negated { "NOT " } else { "" })
             }
             Expr::Between {
                 expr,
                 low,
                 high,
                 negated,
-            } => write!(
-                f,
-                "({expr} {}BETWEEN {low} AND {high})",
-                if *negated { "NOT " } else { "" }
-            ),
+            } => {
+                child(f, expr, 5, false)?;
+                write!(f, " {}BETWEEN ", if *negated { "NOT " } else { "" })?;
+                child(f, low, 5, false)?;
+                f.write_str(" AND ")?;
+                child(f, high, 5, false)
+            }
             Expr::InList {
                 expr,
                 list,
                 negated,
             } => {
+                child(f, expr, 5, false)?;
                 let items: Vec<String> = list.iter().map(|e| e.to_string()).collect();
-                write!(
-                    f,
-                    "({expr} {}IN ({}))",
-                    if *negated { "NOT " } else { "" },
-                    items.join(", ")
-                )
+                write!(f, " {}IN ({})", if *negated { "NOT " } else { "" }, items.join(", "))
             }
             Expr::Like {
                 expr,
                 pattern,
                 negated,
-            } => write!(f, "({expr} {}LIKE {pattern})", if *negated { "NOT " } else { "" }),
+            } => {
+                child(f, expr, 5, false)?;
+                write!(f, " {}LIKE ", if *negated { "NOT " } else { "" })?;
+                child(f, pattern, 5, false)
+            }
             Expr::Case {
                 operand,
                 branches,

@@ -828,15 +828,20 @@ mod tests {
 
     #[test]
     fn precedence_climbing() {
-        assert_eq!(expr("1 + 2 * 3"), "(1 + (2 * 3))");
-        assert_eq!(expr("1 - 2 - 3"), "((1 - 2) - 3)");
-        assert_eq!(expr("a OR b AND c"), "(a OR (b AND c))");
-        assert_eq!(expr("NOT a = b AND c"), "((NOT (a = b)) AND c)");
-        assert_eq!(expr("-a * b"), "((-a) * b)");
-        assert_eq!(expr("a || b = c"), "((a || b) = c)");
-        assert_eq!(expr("x BETWEEN 1 AND 2 AND y"), "((x BETWEEN 1 AND 2) AND y)");
-        assert_eq!(expr("x NOT IN (1, 2) OR y IS NOT NULL"), "((x NOT IN (1, 2)) OR (y IS NOT NULL))");
-        assert_eq!(expr("s NOT LIKE 'a%'"), "(s NOT LIKE 'a%')");
+        assert_eq!(expr("1 + 2 * 3"), "1 + 2 * 3");
+        assert_eq!(expr("(1 + 2) * 3"), "(1 + 2) * 3");
+        assert_eq!(expr("1 - 2 - 3"), "1 - 2 - 3");
+        assert_eq!(expr("1 - (2 - 3)"), "1 - (2 - 3)");
+        assert_eq!(expr("a OR b AND c"), "a OR b AND c");
+        assert_eq!(expr("(a OR b) AND c"), "(a OR b) AND c");
+        assert_eq!(expr("NOT a = b AND c"), "NOT a = b AND c");
+        assert_eq!(expr("NOT (a AND b)"), "NOT (a AND b)");
+        assert_eq!(expr("-a * b"), "-a * b");
+        assert_eq!(expr("-(a * b)"), "-(a * b)");
+        assert_eq!(expr("a || b = c"), "a || b = c");
+        assert_eq!(expr("x BETWEEN 1 AND 2 AND y"), "x BETWEEN 1 AND 2 AND y");
+        assert_eq!(expr("x NOT IN (1, 2) OR y IS NOT NULL"), "x NOT IN (1, 2) OR y IS NOT NULL");
+        assert_eq!(expr("s NOT LIKE 'a%'"), "s NOT LIKE 'a%'");
         assert_eq!(expr("-5"), "-5");
         assert_eq!(expr("+5"), "5");
     }
@@ -845,12 +850,12 @@ mod tests {
     fn special_forms() {
         assert_eq!(
             expr("CASE WHEN a > 1 THEN 'x' ELSE 'y' END"),
-            "CASE WHEN (a > 1) THEN 'x' ELSE 'y' END"
+            "CASE WHEN a > 1 THEN 'x' ELSE 'y' END"
         );
         assert_eq!(expr("CASE a WHEN 1 THEN 2 END"), "CASE a WHEN 1 THEN 2 END");
         assert_eq!(expr("CAST(x AS DECIMAL(12,2))"), "CAST(x AS Double)");
         assert_eq!(expr("EXTRACT(YEAR FROM d)"), "EXTRACT(Year FROM d)");
-        assert_eq!(expr("DATE '1995-01-01' + INTERVAL '3' MONTH"), "(DATE '1995-01-01' + INTERVAL '3' MONTH)");
+        assert_eq!(expr("DATE '1995-01-01' + INTERVAL '3' MONTH"), "DATE '1995-01-01' + INTERVAL '3' MONTH");
         assert_eq!(expr("INTERVAL '1 year'"), "INTERVAL '1' YEAR");
         assert_eq!(expr("count(DISTINCT a)"), "count(DISTINCT a)");
         assert_eq!(expr("count(*)"), "count(*)");
