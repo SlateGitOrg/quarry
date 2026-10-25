@@ -4,7 +4,12 @@
 //! Each proptest case is a seed for a small recursive query generator. The
 //! generator sticks to constructs whose semantics the two engines share
 //! (integer arithmetic, comparisons, NULL logic, LIKE, IN, BETWEEN, CASE,
-//! COALESCE, grouping, inner/left joins). Set `PROPTEST_CASES` to run more.
+//! COALESCE, grouping, inner/left joins), plus a DOUBLE expression family
+//! that produces signed zeros (`f * 0`, unary minus) and feeds them to
+//! comparisons, IN lists, GROUP BY, DISTINCT, ORDER BY and join keys. Its
+//! operands are multiples of 0.25 and its products stay shallow, so every
+//! value is exact in binary floating point and comparisons cannot flake on
+//! rounding. Set `PROPTEST_CASES` to run more.
 
 mod common;
 
@@ -58,15 +63,55 @@ impl Gen {
         }
     }
 
+    /// A DOUBLE expression that often evaluates to -0.0.
+    fn fnum(&mut self, depth: u32) -> String {
+        let q = self.q;
+        if depth == 0 || self.chance(40) {
+            return match self.rng.range(0, 4) {
+                0 => format!("{q}f"),
+                1 => format!("({q}f * 0)"),
+                2 => format!("(- ({q}f * 0))"),
+                3 => format!("({q}f * -1)"),
+                _ => ["0.0", "-0.0", "0.25", "-1.5", "2.0"][self.rng.range(0, 4) as usize]
+                    .to_string(),
+            };
+        }
+        match self.rng.range(0, 4) {
+            0 => {
+                let op = ["+", "-", "*"][self.rng.range(0, 2) as usize];
+                format!("({} {op} {})", self.fnum(depth - 1), self.fnum(depth - 1))
+            }
+            1 => format!("abs({})", self.fnum(depth - 1)),
+            2 => format!(
+                "coalesce({}, {})",
+                self.fnum(depth - 1),
+                self.fnum(depth - 1)
+            ),
+            3 => format!("({} * 0)", self.fnum(depth - 1)),
+            _ => format!("(- {})", self.fnum(depth - 1)),
+        }
+    }
+
     fn pred(&mut self, depth: u32) -> String {
         let q = self.q;
         let leaf = depth == 0 || self.chance(40);
         if leaf {
-            return match self.rng.range(0, 6) {
+            return match self.rng.range(0, 9) {
                 0 => {
                     let op = ["=", "<>", "<", "<=", ">", ">="][self.rng.range(0, 5) as usize];
                     format!("{} {op} {}", self.num(1), self.num(1))
                 }
+                7 => {
+                    let op = ["=", "<>", "<", "<=", ">", ">="][self.rng.range(0, 5) as usize];
+                    format!("{} {op} {}", self.fnum(1), self.fnum(1))
+                }
+                8 => format!(
+                    "{} {}IN ({}, {})",
+                    self.fnum(1),
+                    if self.chance(30) { "NOT " } else { "" },
+                    self.fnum(0),
+                    self.fnum(0)
+                ),
                 1 => format!(
                     "{}{} IS {}NULL",
                     q,
@@ -114,7 +159,8 @@ impl Gen {
                     q,
                     ["x", "y", "z"][self.rng.range(0, 2) as usize]
                 ),
-                _ => format!("{}f > {}", q, self.rng.range(-8, 8)),
+                6 => format!("{}f > {}", q, self.rng.range(-8, 8)),
+                _ => format!("{}f * 0 = 0", q),
             };
         }
         match self.rng.range(0, 2) {
@@ -125,7 +171,7 @@ impl Gen {
     }
 
     fn query(&mut self) -> (String, bool) {
-        match self.rng.range(0, 3) {
+        match self.rng.range(0, 5) {
             0 => {
                 self.q = "";
                 let order = self.chance(30);
@@ -174,12 +220,52 @@ impl Gen {
                 );
                 (sql, false)
             }
-            _ => {
+            3 => {
                 self.q = "";
                 let sql = format!(
                     "SELECT k, count(*) FROM (SELECT {} AS k FROM t WHERE {}) AS d GROUP BY k",
                     self.num(2),
                     self.pred(2)
+                );
+                (sql, false)
+            }
+            4 => {
+                // Signed zeros as GROUP BY / DISTINCT keys and sort keys.
+                self.q = "";
+                let sql = match self.rng.range(0, 2) {
+                    0 => format!(
+                        "SELECT {} AS k, count(*), count(DISTINCT {}) FROM t WHERE {} GROUP BY k",
+                        self.fnum(2),
+                        self.fnum(1),
+                        self.pred(1)
+                    ),
+                    1 => format!(
+                        "SELECT DISTINCT {} FROM t WHERE {}",
+                        self.fnum(2),
+                        self.pred(1)
+                    ),
+                    _ => {
+                        let sql = format!(
+                            "SELECT id, {} AS k FROM t WHERE f IS NOT NULL AND {} ORDER BY k{}, id LIMIT {}",
+                            self.fnum(2),
+                            self.pred(1),
+                            if self.chance(50) { " DESC" } else { "" },
+                            self.rng.range(1, 40)
+                        );
+                        return (sql, true);
+                    }
+                };
+                (sql, false)
+            }
+            _ => {
+                // Signed zeros as equi-join keys.
+                self.q = "t.";
+                let left = self.fnum(1);
+                self.q = "t2.";
+                let right = self.fnum(1);
+                let kind = if self.chance(50) { "LEFT JOIN" } else { "JOIN" };
+                let sql = format!(
+                    "SELECT t.id, t2.id FROM t {kind} t t2 ON {left} = {right} AND t2.id < 25 WHERE t.id < 60"
                 );
                 (sql, false)
             }

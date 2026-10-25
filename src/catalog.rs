@@ -188,7 +188,8 @@ impl StatsCollector {
             DataType::Float64 => {
                 let a = col.as_primitive::<Float64Type>();
                 a.iter().flatten().for_each(|v| {
-                    set.insert(hash_of(v.to_bits()));
+                    // -0.0 and 0.0 are one distinct value.
+                    set.insert(hash_of((v + 0.0).to_bits()));
                 });
                 (
                     arrow::compute::min(a).map(|v| ScalarValue::Float64(Some(v))),

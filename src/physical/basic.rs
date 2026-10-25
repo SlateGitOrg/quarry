@@ -7,7 +7,7 @@ use arrow::compute::SortOptions;
 use arrow::compute::{concat_batches, filter_record_batch, lexsort_to_indices, take, SortColumn};
 use arrow::datatypes::SchemaRef;
 
-use super::expr::{null_as_false, PhysicalExpr};
+use super::expr::{canonical_zero, null_as_false, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
 use crate::error::Result;
 
@@ -147,7 +147,8 @@ impl SortExec {
             .iter()
             .map(|k| {
                 Ok(SortColumn {
-                    values: k.expr.evaluate(&all)?.into_array(all.num_rows()),
+                    // Arrow sorts -0.0 before 0.0; SQL treats them as ties.
+                    values: canonical_zero(k.expr.evaluate(&all)?.into_array(all.num_rows())),
                     options: Some(k.options),
                 })
             })

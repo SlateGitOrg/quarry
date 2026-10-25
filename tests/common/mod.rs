@@ -28,7 +28,8 @@ impl V {
         match self {
             V::Null => "0".into(),
             V::Int(i) => format!("1{:.4}", *i as f64),
-            V::Float(f) => format!("1{f:.4}"),
+            // `+ 0.0` folds -0.0 into 0.0, which compare equal.
+            V::Float(f) => format!("1{:.4}", f + 0.0),
             V::Text(s) => format!("2{s}"),
         }
     }

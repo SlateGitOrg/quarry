@@ -283,10 +283,11 @@ impl PhysicalExpr {
                 list,
                 negated,
             } => {
-                let x = expr.evaluate(batch)?;
+                let x = canonical_zero_value(expr.evaluate(batch)?);
                 let mut acc: Option<ColumnarValue> = None;
                 for item in list {
-                    let eq = apply_datum(&x, &item.evaluate(batch)?, &bool_result(cmp::eq))?;
+                    let item = canonical_zero_value(item.evaluate(batch)?);
+                    let eq = apply_datum(&x, &item, &bool_result(cmp::eq))?;
                     acc = Some(match acc {
                         None => eq,
                         Some(prev) => eval_binary(prev, BinaryOp::Or, eq, n)?,
@@ -333,6 +334,36 @@ impl PhysicalExpr {
     }
 }
 
+/// Replace every `-0.0` in a DOUBLE column with `0.0`; other columns pass
+/// through untouched.
+///
+/// SQL (like IEEE 754) treats the two zeros as equal, but Arrow's comparison
+/// kernels and its row format order floats totally, putting `-0.0` strictly
+/// below `0.0`. Comparisons, IN lists, join keys, group keys, DISTINCT values
+/// and sort keys therefore go through this first. Adding `0.0` maps `-0.0` to
+/// `0.0` and leaves every other value (NaN included) unchanged.
+pub fn canonical_zero(a: ArrayRef) -> ArrayRef {
+    if a.data_type() != &arrow::datatypes::DataType::Float64 {
+        return a;
+    }
+    let f = a.as_primitive::<Float64Type>();
+    if !f.values().iter().any(|x| *x == 0.0 && x.is_sign_negative()) {
+        return a;
+    }
+    Arc::new(f.unary::<_, Float64Type>(|x| x + 0.0))
+}
+
+/// [`canonical_zero`] for a column or a scalar.
+pub fn canonical_zero_value(v: ColumnarValue) -> ColumnarValue {
+    match v {
+        ColumnarValue::Array(a) => ColumnarValue::Array(canonical_zero(a)),
+        ColumnarValue::Scalar(ScalarValue::Float64(Some(x))) => {
+            ColumnarValue::Scalar(ScalarValue::Float64(Some(x + 0.0)))
+        }
+        s => s,
+    }
+}
+
 fn map_unary(v: ColumnarValue, f: impl Fn(ArrayRef) -> Result<ArrayRef>) -> Result<ColumnarValue> {
     match v {
         ColumnarValue::Array(a) => Ok(ColumnarValue::Array(f(a)?)),
@@ -346,6 +377,11 @@ fn eval_binary(
     r: ColumnarValue,
     n: usize,
 ) -> Result<ColumnarValue> {
+    let (l, r) = if op.is_comparison() {
+        (canonical_zero_value(l), canonical_zero_value(r))
+    } else {
+        (l, r)
+    };
     match op {
         BinaryOp::Eq => apply_datum(&l, &r, &bool_result(cmp::eq)),
         BinaryOp::NotEq => apply_datum(&l, &r, &bool_result(cmp::neq)),
@@ -785,6 +821,48 @@ mod tests {
         assert_eq!(
             evaluate_constant(&round).unwrap(),
             ScalarValue::Float64(Some(1.23))
+        );
+    }
+
+    #[test]
+    fn canonical_zero_folds_negative_zero_only() {
+        let a: ArrayRef = Arc::new(Float64Array::from(vec![
+            Some(-0.0),
+            Some(0.0),
+            None,
+            Some(-1.5),
+            Some(f64::NAN),
+        ]));
+        let out = canonical_zero(a);
+        let out = out.as_primitive::<Float64Type>();
+        assert!(out.value(0) == 0.0 && out.value(0).is_sign_positive());
+        assert!(out.value(1).is_sign_positive());
+        assert!(out.is_null(2));
+        assert_eq!(out.value(3), -1.5);
+        assert!(out.value(4).is_nan());
+        // Arrays without -0.0 and non-DOUBLE arrays come back as the same array.
+        let plain: ArrayRef = Arc::new(Float64Array::from(vec![1.0, 0.0]));
+        assert!(Arc::ptr_eq(&canonical_zero(Arc::clone(&plain)), &plain));
+        let ints: ArrayRef = Arc::new(Int64Array::from(vec![0, -1]));
+        assert!(Arc::ptr_eq(&canonical_zero(Arc::clone(&ints)), &ints));
+        match canonical_zero_value(ColumnarValue::Scalar(ScalarValue::Float64(Some(-0.0)))) {
+            ColumnarValue::Scalar(ScalarValue::Float64(Some(x))) => {
+                assert!(x == 0.0 && x.is_sign_positive())
+            }
+            other => panic!("{other:?}"),
+        }
+        // -0.0 = 0.0 is true and -0.0 < 0.0 is false, as in SQL.
+        let neg = Expr::Literal(ScalarValue::Float64(Some(-0.0)));
+        let pos = Expr::Literal(ScalarValue::Float64(Some(0.0)));
+        let eq = Expr::binary(neg.clone(), BinaryOp::Eq, pos.clone());
+        let lt = Expr::binary(neg, BinaryOp::Lt, pos);
+        assert_eq!(
+            evaluate_constant(&eq).unwrap(),
+            ScalarValue::Boolean(Some(true))
+        );
+        assert_eq!(
+            evaluate_constant(&lt).unwrap(),
+            ScalarValue::Boolean(Some(false))
         );
     }
 }

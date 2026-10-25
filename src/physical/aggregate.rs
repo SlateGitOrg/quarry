@@ -20,7 +20,7 @@ use arrow::datatypes::{DataType as ArrowType, Date32Type, Float64Type, Int64Type
 use arrow::row::{RowConverter, Rows, SortField};
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::expr::PhysicalExpr;
+use super::expr::{canonical_zero, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
 use crate::error::{exec_err, Result};
 use crate::plan::expr::AggFunc;
@@ -293,6 +293,8 @@ impl Accumulator for DistinctAcc {
         _num_groups: usize,
     ) -> Result<()> {
         let Some(v) = values else { return Ok(()) };
+        // -0.0 and 0.0 are one distinct value.
+        let v = &canonical_zero(Arc::clone(v));
         let rows = self.converter.convert_columns(std::slice::from_ref(v))?;
         for (i, g) in groups.iter().enumerate() {
             if v.is_valid(i) && self.seen.insert((*g, rows.row(i).as_ref().into())) {
@@ -483,7 +485,7 @@ impl HashAggregateExec {
             let keys = self
                 .group_exprs
                 .iter()
-                .map(|e| Ok(e.evaluate(&batch)?.into_array(n)))
+                .map(|e| Ok(canonical_zero(e.evaluate(&batch)?.into_array(n))))
                 .collect::<Result<Vec<_>>>()?;
             let ids = table.group_ids(&keys, n)?;
             for agg in &mut self.aggs {

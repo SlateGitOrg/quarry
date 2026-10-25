@@ -21,7 +21,7 @@ use arrow::row::{RowConverter, Rows, SortField};
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasher;
 
-use super::expr::{null_as_false, PhysicalExpr};
+use super::expr::{canonical_zero, null_as_false, PhysicalExpr};
 use super::{make_batch, ExecNode, Operator};
 use crate::error::Result;
 use crate::plan::logical::JoinType;
@@ -169,9 +169,15 @@ impl HashJoinExec {
     }
 }
 
+/// Evaluate the equi-join keys; `-0.0` is folded into `0.0` so the two zeros
+/// encode to the same row bytes and match each other.
 fn eval_keys(keys: &[PhysicalExpr], batch: &RecordBatch) -> Result<Vec<ArrayRef>> {
     keys.iter()
-        .map(|k| Ok(k.evaluate(batch)?.into_array(batch.num_rows())))
+        .map(|k| {
+            Ok(canonical_zero(
+                k.evaluate(batch)?.into_array(batch.num_rows()),
+            ))
+        })
         .collect()
 }
 
