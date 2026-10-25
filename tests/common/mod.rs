@@ -3,6 +3,8 @@
 
 #![allow(dead_code)]
 
+pub mod features;
+
 use std::sync::{Arc, Mutex, OnceLock};
 
 use arrow::array::RecordBatch;
